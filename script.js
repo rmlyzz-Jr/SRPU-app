@@ -22,6 +22,62 @@
     var keyboardVisible = false;
     var lastFocusedElement = null;
     var isInitialLoad = true;
+    var isClosing = false;
+
+    // ==================== ALERT SEBELUM CLOSE/REFRESH ====================
+    function confirmBeforeClose(event) {
+        var hasUnsavedData = false;
+        
+        if (batchItems.length > 0) {
+            for (var i = 0; i < batchItems.length; i++) {
+                var batch = batchItems[i];
+                for (var j = 0; j < batch.items.length; j++) {
+                    var item = batch.items[j];
+                    if (item.jenis && item.jumlah > 0 && item.harga > 0) {
+                        hasUnsavedData = true;
+                        break;
+                    }
+                }
+                if (hasUnsavedData) break;
+            }
+        }
+
+        if (hasUnsavedData && !isClosing) {
+            event.preventDefault();
+            event.returnValue = '⚠️ Ada transaksi yang belum disimpan! Yakin ingin meninggalkan halaman?';
+            return event.returnValue;
+        }
+    }
+
+    window.addEventListener('beforeunload', confirmBeforeClose);
+
+    window.addEventListener('popstate', function(event) {
+        if (batchItems.length > 0 && !isClosing) {
+            var hasData = false;
+            for (var i = 0; i < batchItems.length; i++) {
+                var batch = batchItems[i];
+                for (var j = 0; j < batch.items.length; j++) {
+                    var item = batch.items[j];
+                    if (item.jenis && item.jumlah > 0 && item.harga > 0) {
+                        hasData = true;
+                        break;
+                    }
+                }
+                if (hasData) break;
+            }
+            
+            if (hasData) {
+                var confirmClose = confirm('⚠️ Ada transaksi yang belum disimpan! Yakin ingin meninggalkan halaman?');
+                if (!confirmClose) {
+                    history.pushState(null, null, location.href);
+                } else {
+                    isClosing = true;
+                }
+            }
+        }
+    });
+
+    history.pushState(null, null, location.href);
 
     // ==================== SCROLL TO FIELD (Mobile Keyboard Fix) ====================
     function scrollToElement(element, delay) {
@@ -64,7 +120,7 @@
         if (!el.length) return;
         
         setTimeout(function() {
-            // Scroll ke elemen
+            // Scroll ke posisi elemen
             scrollToElement(el, 100);
             
             // Fokus ke elemen
@@ -326,7 +382,6 @@
         html += '<span class="batch-number">#' + (batchItems.indexOf(item) + 1) + '</span>';
         html += '<button type="button" class="btn btn-sm btn-danger btn-remove-batch" onclick="window.removeBatch(\'' + item.id + '\')"><i class="fas fa-times"></i></button>';
         
-        // ROW PERTAMA: Pembeli, DP, Metode - Ukuran lebih kecil
         html += '<div class="row g-1 mb-2">';
         html += '<div class="col-12 col-md-5">';
         html += '<label class="form-label"><i class="fas fa-user"></i> Pembeli</label>';
@@ -354,7 +409,6 @@
         }
         html += '</select></div></div>';
         
-        // ROW KEDUA: Bongkaran
         html += '<div class="row g-1 mb-2">';
         html += '<div class="col-12">';
         html += '<label class="form-label"><i class="fas fa-boxes"></i> Bongkaran</label>';
@@ -362,7 +416,6 @@
         html += '<div class="auto-fill-hint">💡 Isi otomatis dari master bongkaran</div>';
         html += '</div></div>';
         
-        // TABLE ITEMS - DIPERBAIKI UNTUK HP
         html += '<div class="table-container"><div class="table-responsive">';
         html += '<table class="table-ikan table-sm">';
         html += '<thead><tr>';
@@ -449,25 +502,25 @@
             setTimeout(function() {
                 var pembeliSelect = $('#pembeli-select-' + batchId);
                 if (pembeliSelect.length) {
-                    // Buka Select2
-                    pembeliSelect.select2('open');
+                    // Scroll ke elemen terlebih dahulu
+                    scrollToElement(pembeliSelect, 100);
                     
-                    // Fokus ke search field setelah dropdown terbuka
+                    // Buka Select2 setelah scroll
                     setTimeout(function() {
-                        var searchField = document.querySelector('.select2-container--open .select2-search__field');
-                        if (searchField) {
-                            searchField.focus();
-                            searchField.select();
-                            // Scroll ke elemen
-                            scrollToElement(searchField, 100);
-                        } else {
-                            // Fallback: fokus ke select itu sendiri
-                            pembeliSelect.focus();
-                            scrollToElement(pembeliSelect, 100);
-                        }
-                    }, 300);
+                        pembeliSelect.select2('open');
+                        
+                        // Fokus ke search field setelah dropdown terbuka
+                        setTimeout(function() {
+                            var searchField = document.querySelector('.select2-container--open .select2-search__field');
+                            if (searchField) {
+                                searchField.focus();
+                                searchField.select();
+                                scrollToElement(searchField, 100);
+                            }
+                        }, 300);
+                    }, 200);
                 }
-            }, 500);
+            }, 400);
         }
         
         return item;
@@ -817,11 +870,19 @@
                 filterData();
                 tampilkanRekapBongkaran();
                 
-                // Fokus ke tanggal setelah load selesai
+                // Fokus ke tanggal setelah load selesai - TIDAK TURUN KE BAWAH
                 if (isInitialLoad) {
                     setTimeout(function() {
-                        focusToElement('#tanggal', 600);
-                        isInitialLoad = false;
+                        // Scroll ke bagian atas halaman terlebih dahulu
+                        $('html, body').animate({
+                            scrollTop: 0
+                        }, 300);
+                        
+                        // Setelah scroll ke atas, fokus ke tanggal
+                        setTimeout(function() {
+                            focusToElement('#tanggal', 200);
+                            isInitialLoad = false;
+                        }, 400);
                     }, 800);
                 }
             } else throw new Error(result.message || 'Gagal mengambil data');
