@@ -1,4 +1,4 @@
-/* script.js */
+/* script.js - Update bagian scroll dan auto focus */
 /**
  * ============================================================
  * RPU App - Main JavaScript
@@ -19,60 +19,102 @@
     var DEFAULT_ROWS_PER_BATCH = 4;
     var DEFAULT_PEMBELI = ['Pembeli 1', 'Pembeli 2', 'Pembeli 3', 'Pembeli 4', 'Pembeli 5'];
     var isMobile = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+    var keyboardVisible = false;
+    var lastFocusedElement = null;
 
     // ==================== SCROLL TO FIELD (Mobile Keyboard Fix) ====================
-    function scrollToElement(element) {
+    function scrollToElement(element, delay) {
+        delay = delay || 100;
         if (!element) return;
         
         var el = $(element);
         if (!el.length) return;
         
-        var offset = el.offset();
-        if (!offset) return;
-        
-        var windowHeight = $(window).height();
-        var elementTop = offset.top;
-        var elementHeight = el.outerHeight() || 40;
-        var keyboardHeight = isMobile ? 250 : 0;
-        var padding = 20;
-        var targetScroll = elementTop - (windowHeight - elementHeight - keyboardHeight - padding);
-        
-        if (targetScroll > 0) {
-            $('html, body').animate({
-                scrollTop: targetScroll + 60
-            }, 300);
-        }
+        setTimeout(function() {
+            var offset = el.offset();
+            if (!offset) return;
+            
+            var windowHeight = $(window).height();
+            var elementTop = offset.top;
+            var elementHeight = el.outerHeight() || 40;
+            var keyboardHeight = isMobile ? 280 : 0;
+            var padding = 30;
+            
+            // Hitung posisi scroll target
+            var targetScroll = elementTop - (windowHeight - elementHeight - keyboardHeight - padding);
+            
+            // Tambahkan padding extra untuk scroll
+            if (targetScroll > 0) {
+                $('html, body').animate({
+                    scrollTop: targetScroll + 80
+                }, 350);
+            } else {
+                // Jika elemen di atas, tetap scroll sedikit agar terlihat
+                var currentScroll = $(window).scrollTop();
+                if (elementTop - currentScroll < 60) {
+                    $('html, body').animate({
+                        scrollTop: elementTop - 100
+                    }, 300);
+                }
+            }
+        }, delay);
     }
 
-    // Deteksi focus pada semua input/select/textarea
+    // Deteksi fokus pada semua input/select/textarea
     $(document).on('focus', 'input, select, textarea', function() {
         var $this = $(this);
-        setTimeout(function() {
-            scrollToElement($this);
-        }, 350);
+        lastFocusedElement = this;
+        
+        // Jika di mobile, scroll dengan delay lebih panjang
+        var delay = isMobile ? 450 : 200;
+        
+        // Scroll ke elemen
+        scrollToElement($this, delay);
+        
+        // Untuk input number, select all text
+        if ($this.is('input[type="number"]')) {
+            setTimeout(function() {
+                $this.select();
+            }, 100);
+        }
     });
 
     // Untuk Select2 - fokus saat dropdown terbuka
     $(document).on('select2:open', function(e) {
         var $target = $(e.target);
+        var delay = isMobile ? 500 : 300;
+        
         setTimeout(function() {
             var searchField = $target.closest('.select2-container').find('.select2-search__field');
             if (searchField.length) {
-                scrollToElement(searchField);
+                scrollToElement(searchField, 100);
+                setTimeout(function() {
+                    searchField.focus();
+                    searchField.select();
+                }, 200);
             } else {
-                scrollToElement($target);
+                scrollToElement($target, 100);
             }
-        }, 400);
+        }, delay);
     });
 
-    function scrollToActiveElement() {
-        var activeElement = document.activeElement;
-        if (activeElement && (activeElement.tagName === 'INPUT' || activeElement.tagName === 'SELECT' || activeElement.tagName === 'TEXTAREA')) {
+    // Deteksi perubahan ukuran window (keyboard muncul/sembunyi)
+    var lastWindowHeight = $(window).height();
+    $(window).on('resize', function() {
+        var currentHeight = $(window).height();
+        var isKeyboardOpen = currentHeight < lastWindowHeight * 0.7;
+        
+        if (isKeyboardOpen && lastFocusedElement) {
+            keyboardVisible = true;
             setTimeout(function() {
-                scrollToElement(activeElement);
+                scrollToElement(lastFocusedElement, 100);
             }, 300);
+        } else if (!isKeyboardOpen && keyboardVisible) {
+            keyboardVisible = false;
         }
-    }
+        
+        lastWindowHeight = currentHeight;
+    });
 
     // ==================== UTILITY FUNCTIONS ====================
     function formatRupiah(angka) {
@@ -307,16 +349,22 @@
         html += '<div class="auto-fill-hint">💡 Isi otomatis dari master bongkaran</div>';
         html += '</div></div>';
         
-        // TABLE ITEMS
+        // TABLE ITEMS - DIPERBAIKI UNTUK HP
         html += '<div class="table-container"><div class="table-responsive">';
-        html += '<table class="table-ikan" style="width:100%; table-layout:fixed;">';
-        html += '<thead><tr><th style="width:30%">Jenis Ikan</th><th style="width:18%">Jumlah (kg)</th><th style="width:22%">Harga (Rp/kg)</th><th style="width:20%">Subtotal</th><th style="width:10%">Aksi</th></tr></thead>';
+        html += '<table class="table-ikan">';
+        html += '<thead><tr>';
+        html += '<th style="width:28%;min-width:80px;">Jenis Ikan</th>';
+        html += '<th style="width:18%;min-width:70px;">Jumlah (kg)</th>';
+        html += '<th style="width:22%;min-width:80px;">Harga (Rp/kg)</th>';
+        html += '<th style="width:22%;min-width:80px;">Subtotal</th>';
+        html += '<th style="width:10%;min-width:40px;">Aksi</th>';
+        html += '</tr></thead>';
         html += '<tbody id="itemsBody-' + item.id + '">';
         for (var i = 0; i < item.items.length; i++) {
             var row = item.items[i];
             html += '<tr id="' + item.id + '-item-' + i + '">';
             html += '<td><select class="form-select select-ikan-batch" data-batch="' + item.id + '" data-row="' + i + '" style="width:100%;">';
-            html += '<option value="">Pilih jenis ikan</option>';
+            html += '<option value="">Pilih</option>';
             if (masterData.ikan && masterData.ikan.length) {
                 for (var j = 0; j < masterData.ikan.length; j++) {
                     var ikan = masterData.ikan[j];
@@ -329,8 +377,8 @@
             html += '</select></td>';
             html += '<td><input type="number" step="0.001" class="form-control text-end input-jumlah-batch" data-batch="' + item.id + '" data-row="' + i + '" value="' + (row.jumlah || '') + '" placeholder="0" inputmode="decimal"></td>';
             html += '<td><input type="number" class="form-control text-end input-harga-batch" data-batch="' + item.id + '" data-row="' + i + '" value="' + (row.harga || '') + '" placeholder="0" inputmode="numeric"></td>';
-            html += '<td><input type="text" class="form-control text-end input-subtotal-batch" data-batch="' + item.id + '" data-row="' + i + '" readonly style="background:#e9ecef; font-weight:600; color:#2c7da0;" value="' + formatRupiah(row.subtotal || 0) + '"></td>';
-            html += '<td class="text-center"><button type="button" class="btn btn-danger btn-sm btn-remove-item-batch" data-batch="' + item.id + '" data-row="' + i + '"><i class="fas fa-trash-alt"></i></button></td>';
+            html += '<td><input type="text" class="form-control text-end input-subtotal-batch" data-batch="' + item.id + '" data-row="' + i + '" readonly style="background:#e9ecef; font-weight:600; color:#2c7da0; font-size:12px;" value="' + formatRupiah(row.subtotal || 0) + '"></td>';
+            html += '<td class="text-center"><button type="button" class="btn btn-danger btn-sm btn-remove-item-batch" data-batch="' + item.id + '" data-row="' + i + '" style="padding:2px 6px; font-size:10px;"><i class="fas fa-trash-alt"></i></button></td>';
             html += '</tr>';
         }
         html += '</tbody></table></div></div>';
@@ -381,8 +429,8 @@
         renderBatchItem(item);
         updateBatchSummary();
         setTimeout(function() {
-            scrollToElement('#' + batchId);
-        }, 200);
+            scrollToElement('#' + batchId, 300);
+        }, 400);
         return item;
     }
 
@@ -444,13 +492,14 @@
                     if (searchField) {
                         searchField.focus();
                         searchField.select();
+                        scrollToElement(searchField, 100);
                     }
-                }, 100);
-            }, 200);
+                }, 150);
+            }, 300);
         }
         setTimeout(function() {
-            scrollToElement(selectIkan.closest('tr'));
-        }, 300);
+            scrollToElement(selectIkan.closest('tr'), 200);
+        }, 500);
     }
 
     function removeItemFromBatch(batchId, row) {
@@ -472,7 +521,8 @@
         if (focusInput.length) {
             setTimeout(function() {
                 focusInput.focus();
-            }, 150);
+                scrollToElement(focusInput, 200);
+            }, 200);
         }
     }
 
@@ -561,6 +611,8 @@
             if (this.value === '0' || this.value === '') {
                 this.value = '';
             }
+            // Select all text
+            this.select();
         }).on('blur', function() {
             if (this.value === '' || this.value === '0') {
                 this.value = '0';
