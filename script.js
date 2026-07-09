@@ -1,3 +1,4 @@
+/* script.js */
 /**
  * ============================================================
  * RPU App - Main JavaScript
@@ -17,6 +18,61 @@
     var DEFAULT_BATCH_COUNT = 5;
     var DEFAULT_ROWS_PER_BATCH = 4;
     var DEFAULT_PEMBELI = ['Pembeli 1', 'Pembeli 2', 'Pembeli 3', 'Pembeli 4', 'Pembeli 5'];
+    var isMobile = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+
+    // ==================== SCROLL TO FIELD (Mobile Keyboard Fix) ====================
+    function scrollToElement(element) {
+        if (!element) return;
+        
+        var el = $(element);
+        if (!el.length) return;
+        
+        var offset = el.offset();
+        if (!offset) return;
+        
+        var windowHeight = $(window).height();
+        var elementTop = offset.top;
+        var elementHeight = el.outerHeight() || 40;
+        var keyboardHeight = isMobile ? 250 : 0;
+        var padding = 20;
+        var targetScroll = elementTop - (windowHeight - elementHeight - keyboardHeight - padding);
+        
+        if (targetScroll > 0) {
+            $('html, body').animate({
+                scrollTop: targetScroll + 60
+            }, 300);
+        }
+    }
+
+    // Deteksi focus pada semua input/select/textarea
+    $(document).on('focus', 'input, select, textarea', function() {
+        var $this = $(this);
+        setTimeout(function() {
+            scrollToElement($this);
+        }, 350);
+    });
+
+    // Untuk Select2 - fokus saat dropdown terbuka
+    $(document).on('select2:open', function(e) {
+        var $target = $(e.target);
+        setTimeout(function() {
+            var searchField = $target.closest('.select2-container').find('.select2-search__field');
+            if (searchField.length) {
+                scrollToElement(searchField);
+            } else {
+                scrollToElement($target);
+            }
+        }, 400);
+    });
+
+    function scrollToActiveElement() {
+        var activeElement = document.activeElement;
+        if (activeElement && (activeElement.tagName === 'INPUT' || activeElement.tagName === 'SELECT' || activeElement.tagName === 'TEXTAREA')) {
+            setTimeout(function() {
+                scrollToElement(activeElement);
+            }, 300);
+        }
+    }
 
     // ==================== UTILITY FUNCTIONS ====================
     function formatRupiah(angka) {
@@ -87,6 +143,7 @@
             width: '100%',
             placeholder: 'Klik lalu ketik',
             allowClear: true,
+            dropdownAutoWidth: true,
             matcher: function(params, data) {
                 var term = $.trim(params.term);
                 if (term === '') return data;
@@ -126,6 +183,7 @@
             width: '100%',
             placeholder: 'Klik lalu ketik',
             allowClear: true,
+            dropdownAutoWidth: true,
             matcher: function(params, data) {
                 var term = $.trim(params.term);
                 if (term === '') return data;
@@ -182,7 +240,7 @@
         $('#summaryItem').text(totalItems);
         $('#summaryTotal').text(formatRupiah(totalNominal));
         $('#totalBatch').text(formatRupiah(totalNominal));
-        $('#batchItemCount').text(totalTransaksi + ' transaksi, ' + totalItems + ' item ikan');
+        $('#batchItemCount').text(totalTransaksi + ' transaksi, ' + totalItems + ' item');
     }
 
     function clearBatch() {
@@ -209,13 +267,13 @@
     }
 
     function renderBatchItemHTML(item) {
-        var html = '<div class="batch-item" id="' + item.id + '">';
+        var html = '<div class="batch-item scroll-target" id="' + item.id + '">';
         html += '<span class="batch-number">#' + (batchItems.indexOf(item) + 1) + '</span>';
         html += '<button type="button" class="btn btn-sm btn-danger btn-remove-batch" onclick="window.removeBatch(\'' + item.id + '\')"><i class="fas fa-times"></i></button>';
         
         // ROW PERTAMA: Pembeli, DP, Metode
-        html += '<div class="row mb-3">';
-        html += '<div class="col-md-5">';
+        html += '<div class="row g-2 mb-3">';
+        html += '<div class="col-12 col-md-5">';
         html += '<label class="form-label"><i class="fas fa-user"></i> Pembeli</label>';
         html += '<select class="form-select select-pembeli-batch" data-batch="' + item.id + '" style="width:100%;" id="pembeli-select-' + item.id + '">';
         html += '<option value="">Pilih pembeli</option>';
@@ -226,11 +284,11 @@
             }
         }
         html += '</select></div>';
-        html += '<div class="col-md-3">';
+        html += '<div class="col-6 col-md-3">';
         html += '<label class="form-label"><i class="fas fa-money-bill-alt"></i> DP</label>';
         html += '<input type="number" class="form-control input-dp-batch" data-batch="' + item.id + '" value="' + (item.dp || 0) + '" step="1000" placeholder="0">';
         html += '</div>';
-        html += '<div class="col-md-4">';
+        html += '<div class="col-6 col-md-4">';
         html += '<label class="form-label"><i class="fas fa-money-bill-wave"></i> Metode</label>';
         html += '<select class="form-select select-metode-batch" data-batch="' + item.id + '">';
         if (masterData.metodePembayaran && masterData.metodePembayaran.length) {
@@ -242,8 +300,8 @@
         html += '</select></div></div>';
         
         // ROW KEDUA: Bongkaran
-        html += '<div class="row mb-2">';
-        html += '<div class="col-md-12">';
+        html += '<div class="row g-2 mb-2">';
+        html += '<div class="col-12">';
         html += '<label class="form-label"><i class="fas fa-boxes"></i> Bongkaran</label>';
         html += '<input type="text" class="form-control input-bongkaran-batch" data-batch="' + item.id + '" value="' + (item.bongkaran || $('#bongkaranBatchGlobal').val() || '') + '" placeholder="Nama bongkaran..." list="bongkaranListBatch">';
         html += '<div class="auto-fill-hint">💡 Isi otomatis dari master bongkaran</div>';
@@ -252,7 +310,7 @@
         // TABLE ITEMS
         html += '<div class="table-container"><div class="table-responsive">';
         html += '<table class="table-ikan" style="width:100%; table-layout:fixed;">';
-        html += '<thead><tr><th style="width:35%">Jenis Ikan</th><th style="width:15%">Jumlah (kg)</th><th style="width:20%">Harga (Rp/kg)</th><th style="width:20%">Subtotal</th><th style="width:10%">Aksi</th></tr></thead>';
+        html += '<thead><tr><th style="width:30%">Jenis Ikan</th><th style="width:18%">Jumlah (kg)</th><th style="width:22%">Harga (Rp/kg)</th><th style="width:20%">Subtotal</th><th style="width:10%">Aksi</th></tr></thead>';
         html += '<tbody id="itemsBody-' + item.id + '">';
         for (var i = 0; i < item.items.length; i++) {
             var row = item.items[i];
@@ -269,15 +327,15 @@
                 }
             }
             html += '</select></td>';
-            html += '<td><input type="number" step="0.001" class="form-control text-end input-jumlah-batch" data-batch="' + item.id + '" data-row="' + i + '" value="' + (row.jumlah || '') + '" placeholder="0" oninput="window.calculateItemSubtotal(\'' + item.id + '\', ' + i + ')"></td>';
-            html += '<td><input type="number" class="form-control text-end input-harga-batch" data-batch="' + item.id + '" data-row="' + i + '" value="' + (row.harga || '') + '" placeholder="0" oninput="window.calculateItemSubtotal(\'' + item.id + '\', ' + i + ')"></td>';
+            html += '<td><input type="number" step="0.001" class="form-control text-end input-jumlah-batch" data-batch="' + item.id + '" data-row="' + i + '" value="' + (row.jumlah || '') + '" placeholder="0" inputmode="decimal"></td>';
+            html += '<td><input type="number" class="form-control text-end input-harga-batch" data-batch="' + item.id + '" data-row="' + i + '" value="' + (row.harga || '') + '" placeholder="0" inputmode="numeric"></td>';
             html += '<td><input type="text" class="form-control text-end input-subtotal-batch" data-batch="' + item.id + '" data-row="' + i + '" readonly style="background:#e9ecef; font-weight:600; color:#2c7da0;" value="' + formatRupiah(row.subtotal || 0) + '"></td>';
             html += '<td class="text-center"><button type="button" class="btn btn-danger btn-sm btn-remove-item-batch" data-batch="' + item.id + '" data-row="' + i + '"><i class="fas fa-trash-alt"></i></button></td>';
             html += '</tr>';
         }
         html += '</tbody></table></div></div>';
         html += '<button type="button" class="btn-add-row" onclick="window.addItemToBatch(\'' + item.id + '\')"><i class="fas fa-plus me-2"></i> Tambah Ikan</button>';
-        html += '<div class="text-end mt-2"><strong>Subtotal Transaksi: <span id="subtotal-' + item.id + '" style="color:#2c7da0;font-size:18px;">' + formatRupiah(item.total) + '</span></strong></div>';
+        html += '<div class="text-end mt-2"><strong>Subtotal: <span id="subtotal-' + item.id + '" style="color:#2c7da0;font-size:18px;">' + formatRupiah(item.total) + '</span></strong></div>';
         html += '</div>';
         return html;
     }
@@ -322,6 +380,9 @@
         batchItems.push(item);
         renderBatchItem(item);
         updateBatchSummary();
+        setTimeout(function() {
+            scrollToElement('#' + batchId);
+        }, 200);
         return item;
     }
 
@@ -387,6 +448,9 @@
                 }, 100);
             }, 200);
         }
+        setTimeout(function() {
+            scrollToElement(selectIkan.closest('tr'));
+        }, 300);
     }
 
     function removeItemFromBatch(batchId, row) {
@@ -674,7 +738,7 @@
                 filter.append('<option value="' + masterData.pembeli[i] + '">' + masterData.pembeli[i] + '</option>');
             }
         }
-        filter.select2({ theme: 'default', width: '100%', placeholder: 'Klik lalu ketik nama pembeli', allowClear: true });
+        filter.select2({ theme: 'default', width: '100%', placeholder: 'Klik lalu ketik', allowClear: true });
     }
 
     function updateFilterMetodePembayaran() {
@@ -842,7 +906,7 @@
         } else {
             tbody.append('<tr><td colspan="2" class="text-center">Belum ada data</td></tr>');
         }
-        $('#pembeliCount').text('Total: ' + masterData.pembeli.length + ' pembeli');
+        $('#pembeliCount').text('Total: ' + masterData.pembeli.length);
     }
 
     function displayIkanList(filterText) {
@@ -863,14 +927,14 @@
                 var nama = typeof item === 'object' ? (item.nama || item) : item;
                 var harga = typeof item === 'object' ? (item.hargaDefault || item.harga || 0) : 0;
                 tbody.append('<tr><td class="text-center">' + (i+1) + '</td><td>' + nama + '</td>' +
-                    '<td><input type="number" class="form-control form-control-sm harga-edit" data-ikan="' + nama + '" value="' + harga + '" step="500" style="width:150px;display:inline-block">' +
+                    '<td><input type="number" class="form-control form-control-sm harga-edit" data-ikan="' + nama + '" value="' + harga + '" step="500" style="width:120px;display:inline-block">' +
                     '<button class="btn btn-sm btn-primary btn-update-harga" data-ikan="' + nama + '"><i class="fas fa-save"></i></button></td>' +
                     '<td class="text-center"><button class="btn btn-sm btn-danger btn-delete-ikan" data-ikan="' + nama + '"><i class="fas fa-trash"></i></button></td></tr>');
             }
         } else {
-            tbody.append('<tr><td colspan="4" class="text-center text-muted">Tidak ada data ikan yang ditemukan untuk "' + filterText + '"</td></tr>');
+            tbody.append('<tr><td colspan="4" class="text-center text-muted">Tidak ada data untuk "' + filterText + '"</td></tr>');
         }
-        $('#ikanCount').text('Total: ' + dataToShow.length + ' / ' + masterData.ikan.length + ' jenis ikan');
+        $('#ikanCount').text('Total: ' + dataToShow.length + ' / ' + masterData.ikan.length);
         $('.btn-update-harga').off('click').on('click', async function() {
             await updateHargaIkan($(this).data('ikan'), $(this).closest('tr').find('.harga-edit').val());
         });
@@ -891,7 +955,7 @@
             if (unique.length) {
                 for (var i = 0; i < unique.length; i++) {
                     tbody.append('<tr><td class="text-center">' + (i+1) + '</td><td>' + unique[i] + '</td>' +
-                        '<td class="text-center"><button class="btn btn-sm btn-danger btn-delete-bongkaran" data-bongkaran="' + unique[i].replace(/"/g,'&quot;') + '"><i class="fas fa-trash"></i> Hapus</button></td></tr>');
+                        '<td class="text-center"><button class="btn btn-sm btn-danger btn-delete-bongkaran" data-bongkaran="' + unique[i].replace(/"/g,'&quot;') + '"><i class="fas fa-trash"></i></button></td></tr>');
                 }
             } else {
                 tbody.append('<tr><td colspan="3" class="text-center">Belum ada data</td></tr>');
@@ -899,7 +963,7 @@
         } else {
             tbody.append('<tr><td colspan="3" class="text-center">Belum ada data</td></tr>');
         }
-        $('#bongkaranCount').text('Total: ' + masterData.bongkaran.length + ' bongkaran');
+        $('#bongkaranCount').text('Total: ' + masterData.bongkaran.length);
     }
 
     function refreshMasterDisplay() {
@@ -1111,13 +1175,6 @@
         $('#btnTambahBatch').on('click', function() {
             addBatchItem('', $('#bongkaranBatchGlobal').val() || '', 0, $('#metodePembayaranBatch').val() || 'Non Kontan');
             updateBatchSummary();
-            setTimeout(function() {
-                var lastBatch = $('#batchContainer .batch-item:last-child');
-                if (lastBatch.length) {
-                    $('html, body').animate({ scrollTop: lastBatch.offset().top - 100 }, 300);
-                    lastBatch.find('.select-pembeli-batch').select2('open');
-                }
-            }, 200);
         });
 
         $('#btnSimpanBatch').on('click', saveBatch);
