@@ -1,4 +1,4 @@
-/* script.js - Update bagian scroll dan auto focus */
+/* script.js - Update renderBatchItemHTML dengan ukuran yang lebih proporsional */
 /**
  * ============================================================
  * RPU App - Main JavaScript
@@ -40,16 +40,13 @@
             var keyboardHeight = isMobile ? 280 : 0;
             var padding = 30;
             
-            // Hitung posisi scroll target
             var targetScroll = elementTop - (windowHeight - elementHeight - keyboardHeight - padding);
             
-            // Tambahkan padding extra untuk scroll
             if (targetScroll > 0) {
                 $('html, body').animate({
                     scrollTop: targetScroll + 80
                 }, 350);
             } else {
-                // Jika elemen di atas, tetap scroll sedikit agar terlihat
                 var currentScroll = $(window).scrollTop();
                 if (elementTop - currentScroll < 60) {
                     $('html, body').animate({
@@ -65,13 +62,9 @@
         var $this = $(this);
         lastFocusedElement = this;
         
-        // Jika di mobile, scroll dengan delay lebih panjang
         var delay = isMobile ? 450 : 200;
-        
-        // Scroll ke elemen
         scrollToElement($this, delay);
         
-        // Untuk input number, select all text
         if ($this.is('input[type="number"]')) {
             setTimeout(function() {
                 $this.select();
@@ -313,11 +306,11 @@
         html += '<span class="batch-number">#' + (batchItems.indexOf(item) + 1) + '</span>';
         html += '<button type="button" class="btn btn-sm btn-danger btn-remove-batch" onclick="window.removeBatch(\'' + item.id + '\')"><i class="fas fa-times"></i></button>';
         
-        // ROW PERTAMA: Pembeli, DP, Metode
-        html += '<div class="row g-2 mb-3">';
+        // ROW PERTAMA: Pembeli, DP, Metode - Ukuran lebih kecil
+        html += '<div class="row g-1 mb-2">';
         html += '<div class="col-12 col-md-5">';
         html += '<label class="form-label"><i class="fas fa-user"></i> Pembeli</label>';
-        html += '<select class="form-select select-pembeli-batch" data-batch="' + item.id + '" style="width:100%;" id="pembeli-select-' + item.id + '">';
+        html += '<select class="form-select form-select-sm select-pembeli-batch" data-batch="' + item.id + '" style="width:100%;" id="pembeli-select-' + item.id + '">';
         html += '<option value="">Pilih pembeli</option>';
         if (masterData.pembeli && masterData.pembeli.length) {
             for (var i = 0; i < masterData.pembeli.length; i++) {
@@ -328,11 +321,11 @@
         html += '</select></div>';
         html += '<div class="col-6 col-md-3">';
         html += '<label class="form-label"><i class="fas fa-money-bill-alt"></i> DP</label>';
-        html += '<input type="number" class="form-control input-dp-batch" data-batch="' + item.id + '" value="' + (item.dp || 0) + '" step="1000" placeholder="0">';
+        html += '<input type="number" class="form-control form-control-sm input-dp-batch" data-batch="' + item.id + '" value="' + (item.dp || 0) + '" step="1000" placeholder="0">';
         html += '</div>';
         html += '<div class="col-6 col-md-4">';
         html += '<label class="form-label"><i class="fas fa-money-bill-wave"></i> Metode</label>';
-        html += '<select class="form-select select-metode-batch" data-batch="' + item.id + '">';
+        html += '<select class="form-select form-select-sm select-metode-batch" data-batch="' + item.id + '">';
         if (masterData.metodePembayaran && masterData.metodePembayaran.length) {
             for (var i = 0; i < masterData.metodePembayaran.length; i++) {
                 var selected = (masterData.metodePembayaran[i] === item.metode) ? 'selected' : '';
@@ -342,28 +335,28 @@
         html += '</select></div></div>';
         
         // ROW KEDUA: Bongkaran
-        html += '<div class="row g-2 mb-2">';
+        html += '<div class="row g-1 mb-2">';
         html += '<div class="col-12">';
         html += '<label class="form-label"><i class="fas fa-boxes"></i> Bongkaran</label>';
-        html += '<input type="text" class="form-control input-bongkaran-batch" data-batch="' + item.id + '" value="' + (item.bongkaran || $('#bongkaranBatchGlobal').val() || '') + '" placeholder="Nama bongkaran..." list="bongkaranListBatch">';
+        html += '<input type="text" class="form-control form-control-sm input-bongkaran-batch" data-batch="' + item.id + '" value="' + (item.bongkaran || $('#bongkaranBatchGlobal').val() || '') + '" placeholder="Nama bongkaran..." list="bongkaranListBatch">';
         html += '<div class="auto-fill-hint">💡 Isi otomatis dari master bongkaran</div>';
         html += '</div></div>';
         
         // TABLE ITEMS - DIPERBAIKI UNTUK HP
         html += '<div class="table-container"><div class="table-responsive">';
-        html += '<table class="table-ikan">';
+        html += '<table class="table-ikan table-sm">';
         html += '<thead><tr>';
-        html += '<th style="width:28%;min-width:80px;">Jenis Ikan</th>';
-        html += '<th style="width:18%;min-width:70px;">Jumlah (kg)</th>';
-        html += '<th style="width:22%;min-width:80px;">Harga (Rp/kg)</th>';
-        html += '<th style="width:22%;min-width:80px;">Subtotal</th>';
-        html += '<th style="width:10%;min-width:40px;">Aksi</th>';
+        html += '<th>Jenis Ikan</th>';
+        html += '<th>Jumlah (kg)</th>';
+        html += '<th>Harga (Rp/kg)</th>';
+        html += '<th>Subtotal</th>';
+        html += '<th>Aksi</th>';
         html += '</tr></thead>';
         html += '<tbody id="itemsBody-' + item.id + '">';
         for (var i = 0; i < item.items.length; i++) {
             var row = item.items[i];
             html += '<tr id="' + item.id + '-item-' + i + '">';
-            html += '<td><select class="form-select select-ikan-batch" data-batch="' + item.id + '" data-row="' + i + '" style="width:100%;">';
+            html += '<td><select class="form-select form-select-sm select-ikan-batch" data-batch="' + item.id + '" data-row="' + i + '" style="width:100%;">';
             html += '<option value="">Pilih</option>';
             if (masterData.ikan && masterData.ikan.length) {
                 for (var j = 0; j < masterData.ikan.length; j++) {
@@ -375,15 +368,15 @@
                 }
             }
             html += '</select></td>';
-            html += '<td><input type="number" step="0.001" class="form-control text-end input-jumlah-batch" data-batch="' + item.id + '" data-row="' + i + '" value="' + (row.jumlah || '') + '" placeholder="0" inputmode="decimal"></td>';
-            html += '<td><input type="number" class="form-control text-end input-harga-batch" data-batch="' + item.id + '" data-row="' + i + '" value="' + (row.harga || '') + '" placeholder="0" inputmode="numeric"></td>';
-            html += '<td><input type="text" class="form-control text-end input-subtotal-batch" data-batch="' + item.id + '" data-row="' + i + '" readonly style="background:#e9ecef; font-weight:600; color:#2c7da0; font-size:12px;" value="' + formatRupiah(row.subtotal || 0) + '"></td>';
-            html += '<td class="text-center"><button type="button" class="btn btn-danger btn-sm btn-remove-item-batch" data-batch="' + item.id + '" data-row="' + i + '" style="padding:2px 6px; font-size:10px;"><i class="fas fa-trash-alt"></i></button></td>';
+            html += '<td><input type="number" step="0.001" class="form-control form-control-sm text-end input-jumlah-batch" data-batch="' + item.id + '" data-row="' + i + '" value="' + (row.jumlah || '') + '" placeholder="0" inputmode="decimal"></td>';
+            html += '<td><input type="number" class="form-control form-control-sm text-end input-harga-batch" data-batch="' + item.id + '" data-row="' + i + '" value="' + (row.harga || '') + '" placeholder="0" inputmode="numeric"></td>';
+            html += '<td><input type="text" class="form-control form-control-sm text-end input-subtotal-batch" data-batch="' + item.id + '" data-row="' + i + '" readonly style="background:#f0f2f5; font-weight:600; color:#2c7da0; font-size:11px;" value="' + formatRupiah(row.subtotal || 0) + '"></td>';
+            html += '<td class="text-center"><button type="button" class="btn btn-danger btn-sm btn-remove-item-batch" data-batch="' + item.id + '" data-row="' + i + '" style="padding:2px 4px; font-size:9px; min-height:22px; height:22px; width:22px; border-radius:4px;"><i class="fas fa-trash-alt" style="font-size:9px;"></i></button></td>';
             html += '</tr>';
         }
         html += '</tbody></table></div></div>';
-        html += '<button type="button" class="btn-add-row" onclick="window.addItemToBatch(\'' + item.id + '\')"><i class="fas fa-plus me-2"></i> Tambah Ikan</button>';
-        html += '<div class="text-end mt-2"><strong>Subtotal: <span id="subtotal-' + item.id + '" style="color:#2c7da0;font-size:18px;">' + formatRupiah(item.total) + '</span></strong></div>';
+        html += '<button type="button" class="btn-add-row" onclick="window.addItemToBatch(\'' + item.id + '\')"><i class="fas fa-plus me-1"></i> Tambah Ikan</button>';
+        html += '<div class="text-end mt-1"><small><strong>Subtotal: <span id="subtotal-' + item.id + '" style="color:#2c7da0;font-size:15px;">' + formatRupiah(item.total) + '</span></strong></small></div>';
         html += '</div>';
         return html;
     }
@@ -611,7 +604,6 @@
             if (this.value === '0' || this.value === '') {
                 this.value = '';
             }
-            // Select all text
             this.select();
         }).on('blur', function() {
             if (this.value === '' || this.value === '0') {
