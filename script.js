@@ -1,4 +1,4 @@
-/* script.js - Update renderBatchItemHTML dengan ukuran yang lebih proporsional */
+/* script.js - Update fungsi addBatchItem dan event listener */
 /**
  * ============================================================
  * RPU App - Main JavaScript
@@ -405,7 +405,9 @@
         reattachGlobalEvents();
     }
 
-    function addBatchItem(pembeli, bongkaran, dp, metode) {
+    function addBatchItem(pembeli, bongkaran, dp, metode, autoFocus) {
+        autoFocus = autoFocus !== undefined ? autoFocus : true;
+        
         batchCounter++;
         var batchId = 'batch-' + batchCounter;
         var item = {
@@ -421,9 +423,33 @@
         batchItems.push(item);
         renderBatchItem(item);
         updateBatchSummary();
-        setTimeout(function() {
-            scrollToElement('#' + batchId, 300);
-        }, 400);
+        
+        // Auto focus ke pembeli setelah batch ditambahkan
+        if (autoFocus) {
+            setTimeout(function() {
+                var pembeliSelect = $('#pembeli-select-' + batchId);
+                if (pembeliSelect.length) {
+                    // Buka Select2
+                    pembeliSelect.select2('open');
+                    
+                    // Fokus ke search field setelah dropdown terbuka
+                    setTimeout(function() {
+                        var searchField = document.querySelector('.select2-container--open .select2-search__field');
+                        if (searchField) {
+                            searchField.focus();
+                            searchField.select();
+                            // Scroll ke elemen
+                            scrollToElement(searchField, 100);
+                        } else {
+                            // Fallback: fokus ke select itu sendiri
+                            pembeliSelect.focus();
+                            scrollToElement(pembeliSelect, 100);
+                        }
+                    }, 300);
+                }
+            }, 500);
+        }
+        
         return item;
     }
 
@@ -689,7 +715,7 @@
             clearBatch();
             for (var i = 0; i < DEFAULT_BATCH_COUNT; i++) {
                 var pembeli = (i < DEFAULT_PEMBELI.length) ? DEFAULT_PEMBELI[i] : '';
-                addBatchItem(pembeli, bongkaranGlobal, 0, $('#metodePembayaranBatch').val() || 'Non Kontan');
+                addBatchItem(pembeli, bongkaranGlobal, 0, $('#metodePembayaranBatch').val() || 'Non Kontan', false);
             }
             updateBatchSummary();
             $('#tanggal').val(tanggalWIB).trigger('change');
@@ -753,7 +779,7 @@
                 if (batchItems.length === 0) {
                     for (var i = 0; i < DEFAULT_BATCH_COUNT; i++) {
                         var pembeli = (i < DEFAULT_PEMBELI.length) ? DEFAULT_PEMBELI[i] : '';
-                        addBatchItem(pembeli, '', 0, 'Non Kontan');
+                        addBatchItem(pembeli, '', 0, 'Non Kontan', false);
                     }
                     updateBatchSummary();
                 }
@@ -1217,7 +1243,7 @@
 
         // Button events
         $('#btnTambahBatch').on('click', function() {
-            addBatchItem('', $('#bongkaranBatchGlobal').val() || '', 0, $('#metodePembayaranBatch').val() || 'Non Kontan');
+            addBatchItem('', $('#bongkaranBatchGlobal').val() || '', 0, $('#metodePembayaranBatch').val() || 'Non Kontan', true);
             updateBatchSummary();
         });
 
