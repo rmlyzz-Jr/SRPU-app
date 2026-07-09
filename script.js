@@ -1,4 +1,4 @@
-/* script.js - Update fungsi addBatchItem dan event listener */
+/* script.js - Update lengkap dengan auto focus yang benar */
 /**
  * ============================================================
  * RPU App - Main JavaScript
@@ -21,6 +21,7 @@
     var isMobile = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
     var keyboardVisible = false;
     var lastFocusedElement = null;
+    var isInitialLoad = true;
 
     // ==================== SCROLL TO FIELD (Mobile Keyboard Fix) ====================
     function scrollToElement(element, delay) {
@@ -54,6 +55,25 @@
                     }, 300);
                 }
             }
+        }, delay);
+    }
+
+    function focusToElement(element, delay) {
+        delay = delay || 300;
+        var el = $(element);
+        if (!el.length) return;
+        
+        setTimeout(function() {
+            // Scroll ke elemen
+            scrollToElement(el, 100);
+            
+            // Fokus ke elemen
+            setTimeout(function() {
+                el.focus();
+                if (el.is('input, textarea')) {
+                    el.select();
+                }
+            }, 200);
         }, delay);
     }
 
@@ -424,7 +444,7 @@
         renderBatchItem(item);
         updateBatchSummary();
         
-        // Auto focus ke pembeli setelah batch ditambahkan
+        // Auto focus ke pembeli setelah batch ditambahkan (jika autoFocus true)
         if (autoFocus) {
             setTimeout(function() {
                 var pembeliSelect = $('#pembeli-select-' + batchId);
@@ -720,6 +740,11 @@
             updateBatchSummary();
             $('#tanggal').val(tanggalWIB).trigger('change');
             $('#tanggalInfo').html("📅 Menggunakan tanggal transaksi terakhir: " + formatTanggalIndonesia(tanggalWIB));
+            
+            // Fokus ke tanggal setelah load
+            setTimeout(function() {
+                focusToElement('#tanggal', 500);
+            }, 600);
         } else {
             alert('⚠️ Gagal menyimpan: ' + errorMsg);
         }
@@ -791,6 +816,14 @@
                 $('#bongkaranTanggalSelect').val(todayStr);
                 filterData();
                 tampilkanRekapBongkaran();
+                
+                // Fokus ke tanggal setelah load selesai
+                if (isInitialLoad) {
+                    setTimeout(function() {
+                        focusToElement('#tanggal', 600);
+                        isInitialLoad = false;
+                    }, 800);
+                }
             } else throw new Error(result.message || 'Gagal mengambil data');
         } catch(err) {
             $('#connectionStatus').removeClass('success').addClass('error').html('<i class="fas fa-exclamation-triangle me-2"></i> Gagal koneksi: ' + err.message).show();
