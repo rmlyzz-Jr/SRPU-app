@@ -1,4 +1,4 @@
-/* style.css - Update untuk tabel lebih rapi di HP */
+/* style.css - Update lengkap untuk tampilan input yang lebih baik */
 /* ============================================================
    RPU App - Style Sheet
    PT Rafasya Putra Ustanto
@@ -243,14 +243,14 @@ input[type="number"]::-webkit-inner-spin-button {
     width: 100%;
     margin: 0;
     border-collapse: collapse;
-    min-width: 400px;
-    font-size: 13px;
+    min-width: 350px;
+    font-size: 12px;
 }
 
 .table-ikan th {
     background: #e9ecef;
-    padding: 8px 6px;
-    font-size: 11px;
+    padding: 6px 4px;
+    font-size: 10px;
     font-weight: 700;
     color: #495057;
     border-bottom: 2px solid #000000;
@@ -262,20 +262,206 @@ input[type="number"]::-webkit-inner-spin-button {
 }
 
 .table-ikan td {
-    padding: 6px 4px;
+    padding: 4px 3px;
     vertical-align: middle;
     border-bottom: 1px solid #e9ecef;
     background: white;
 }
 
+/* ===== INPUT DALAM TABEL - DIPERBAIKI ===== */
 .table-ikan select,
 .table-ikan input {
-    font-size: 13px !important;
-    padding: 6px 8px !important;
-    min-height: 36px;
+    font-size: 12px !important;
+    padding: 4px 6px !important;
+    min-height: 28px !important;
+    height: 28px !important;
     width: 100%;
-    border-radius: 6px;
+    border-radius: 4px;
     border: 1px solid #ddd;
+    background: white;
+    line-height: 1.2 !important;
+}
+
+/* Harga dan subtotal font lebih kecil agar muat */
+.table-ikan .input-harga-batch,
+.table-ikan .input-subtotal-batch {
+    font-size: 11px !important;
+    padding: 3px 4px !important;
+    min-height: 26px !important;
+    height: 26px !important;
+}
+
+/* Subtotal readonly - lebih kecil */
+.table-ikan .input-subtotal-batch {
+    font-size: 11px !important;
+    font-weight: 600 !important;
+    background: #f0f2f5 !important;
+}
+
+/* Select2 di dalam tabel */
+.table-ikan .select2-container--default .select2-selection--single {
+    height: 28px !important;
+    min-height: 28px !important;
+}
+
+.table-ikan .select2-container--default .select2-selection--single .select2-selection__rendered {
+    line-height: 28px !important;
+    font-size: 11px !important;
+    padding-left: 6px !important;
+    padding-right: 20px !important;
+}
+
+.table-ikan .select2-container--default .select2-selection--single .select2-selection__arrow {
+    height: 26px !important;
+}
+
+.table-ikan .select2-container--default .select2-selection--single .select2-selection__arrow b {
+    border-width: 4px 4px 0 4px !important;
+    margin-top: -2px !important;
+}
+
+/* Tombol hapus di tabel lebih kecil */
+.table-ikan .btn-remove-item-batch {
+    padding: 2px 4px !important;
+    font-size: 9px !important;
+    min-height: 22px !important;
+    height: 22px !important;
+    width: 22px !important;
+    border-radius: 4px !important;
+    line-height: 1 !important;
+}
+
+.table-ikan .btn-remove-item-batch i {
+    font-size: 9px !important;
+}
+
+/* Kolom tabel - width lebih proporsional */
+.table-ikan th:nth-child(1) { width: 28%; min-width: 70px; }
+.table-ikan th:nth-child(2) { width: 18%; min-width: 60px; }
+.table-ikan th:nth-child(3) { width: 20%; min-width: 65px; }
+.table-ikan th:nth-child(4) { width: 22%; min-width: 65px; }
+.table-ikan th:nth-child(5) { width: 12%; min-width: 35px; }
+
+/* ===== MOBILE-FRIENDLY TABLE ROWS ===== */
+@media (max-width: 576px) {
+    .table-ikan {
+        min-width: 300px;
+        font-size: 11px;
+    }
+    
+    .table-ikan th {
+        font-size: 9px;
+        padding: 4px 2px;
+    }
+    
+    .table-ikan td {
+        padding: 3px 2px;
+    }
+    
+    .table-ikan select,
+    .table-ikan input {
+        font-size: 11px !important;
+        padding: 3px 4px !important;
+        min-height: 24px !important;
+        height: 24px !important;
+    }
+    
+    .table-ikan .input-harga-batch,
+    .table-ikan .input-subtotal-batch {
+        font-size: 10px !important;
+        padding: 2px 3px !important;
+        min-height: 22px !important;
+        height: 22px !important;
+    }
+    
+    .table-ikan .select2-container--default .select2-selection--single {
+        height: 24px !important;
+        min-height: 24px !important;
+    }
+    
+    .table-ikan .select2-container--default .select2-selection--single .select2-selection__rendered {
+        line-height: 24px !important;
+        font-size: 10px !important;
+    }
+    
+    .table-ikan .select2-container--default .select2-selection--single .select2-selection__arrow {
+        height: 22px !important;
+    }
+    
+    .table-ikan .btn-remove-item-batch {
+        padding: 1px 3px !important;
+        font-size: 8px !important;
+        min-height: 20px !important;
+        height: 20px !important;
+        width: 20px !important;
+    }
+    
+    .table-ikan .btn-remove-item-batch i {
+        font-size: 8px !important;
+    }
+    
+    .table-ikan th:nth-child(1) { width: 26%; min-width: 60px; }
+    .table-ikan th:nth-child(2) { width: 18%; min-width: 50px; }
+    .table-ikan th:nth-child(3) { width: 20%; min-width: 55px; }
+    .table-ikan th:nth-child(4) { width: 24%; min-width: 55px; }
+    .table-ikan th:nth-child(5) { width: 12%; min-width: 30px; }
+    
+    /* Stack form rows di mobile */
+    .batch-item .row.g-2 {
+        margin-left: -4px;
+        margin-right: -4px;
+    }
+    
+    .batch-item .row.g-2 > [class*="col-"] {
+        padding-left: 4px;
+        padding-right: 4px;
+    }
+}
+
+@media (max-width: 400px) {
+    .table-ikan {
+        min-width: 250px;
+        font-size: 10px;
+    }
+    
+    .table-ikan th {
+        font-size: 8px;
+        padding: 3px 1px;
+    }
+    
+    .table-ikan td {
+        padding: 2px 1px;
+    }
+    
+    .table-ikan select,
+    .table-ikan input {
+        font-size: 10px !important;
+        padding: 2px 3px !important;
+        min-height: 22px !important;
+        height: 22px !important;
+    }
+    
+    .table-ikan .input-harga-batch,
+    .table-ikan .input-subtotal-batch {
+        font-size: 9px !important;
+        padding: 2px 2px !important;
+        min-height: 20px !important;
+        height: 20px !important;
+    }
+    
+    .table-ikan .select2-container--default .select2-selection--single {
+        height: 22px !important;
+        min-height: 22px !important;
+    }
+    
+    .table-ikan .select2-container--default .select2-selection--single .select2-selection__rendered {
+        line-height: 22px !important;
+        font-size: 9px !important;
+    }
+    
+    .table-ikan .select2-container--default .select2-selection--single .select2-selection__arrow {
+        height: 20px !important;
+    }
 }
 
 /* ===== BATCH ITEMS - DIPERBAIKI UNTUK HP ===== */
@@ -283,7 +469,7 @@ input[type="number"]::-webkit-inner-spin-button {
     background: #f8f9fa;
     border: 1px solid #e9ecef;
     border-radius: 10px;
-    padding: 12px;
+    padding: 10px;
     margin-bottom: 12px;
     position: relative;
     scroll-margin-top: 100px;
@@ -297,53 +483,43 @@ input[type="number"]::-webkit-inner-spin-button {
     color: white;
     padding: 2px 10px;
     border-radius: 12px;
-    font-size: 11px;
+    font-size: 10px;
     font-weight: 600;
     z-index: 10;
 }
 
 .batch-item .btn-remove-batch {
     position: absolute;
-    top: 8px;
-    right: 8px;
-    padding: 2px 8px;
-    font-size: 11px;
+    top: 6px;
+    right: 6px;
+    padding: 2px 6px;
+    font-size: 10px;
     z-index: 10;
+    min-height: 24px;
+    height: 24px;
 }
 
-/* ===== MOBILE-FRIENDLY TABLE ROWS ===== */
-@media (max-width: 576px) {
-    .table-ikan {
-        min-width: 350px;
-        font-size: 12px;
-    }
-    
-    .table-ikan th {
-        font-size: 10px;
-        padding: 5px 3px;
-    }
-    
-    .table-ikan td {
-        padding: 4px 2px;
-    }
-    
-    .table-ikan select,
-    .table-ikan input {
-        font-size: 12px !important;
-        padding: 4px 6px !important;
-        min-height: 32px;
-    }
-    
-    /* Stack form rows di mobile */
-    .batch-item .row.g-2 {
-        margin-left: -4px;
-        margin-right: -4px;
-    }
-    
-    .batch-item .row.g-2 > [class*="col-"] {
-        padding-left: 4px;
-        padding-right: 4px;
-    }
+/* Label di dalam batch item - lebih kecil */
+.batch-item .form-label {
+    font-size: 11px;
+    margin-bottom: 3px;
+}
+
+.batch-item .form-label i {
+    font-size: 10px;
+}
+
+/* Input di batch item - lebih kecil */
+.batch-item .form-control,
+.batch-item .form-select {
+    font-size: 12px !important;
+    padding: 5px 8px !important;
+    min-height: 30px !important;
+    height: 30px !important;
+}
+
+.batch-item .input-dp-batch {
+    font-size: 12px !important;
 }
 
 /* ===== BUTTONS ===== */
@@ -380,9 +556,9 @@ input[type="number"]::-webkit-inner-spin-button {
     background: linear-gradient(135deg, #2c7da0 0%, #1f5068 100%);
     color: white;
     border: none;
-    padding: 6px 14px;
+    padding: 5px 12px;
     border-radius: 6px;
-    font-size: 12px;
+    font-size: 11px;
     font-weight: 500;
     margin-top: 8px;
     transition: all 0.3s ease;
@@ -658,7 +834,7 @@ input[type="number"]::-webkit-inner-spin-button {
     border: 2px solid #f3f3f3;
     border-top: 2px solid #2c7da0;
     border-radius: 50%;
-    animation: spin 1s linear infinite;
+    animation: spin 1s linear Infinite;
     margin-right: 6px;
 }
 
@@ -683,9 +859,11 @@ input[type="number"]::-webkit-inner-spin-button {
     .company-text p { font-size: 14px; }
     .card-body { padding: 24px; }
     .nav-tabs .nav-link { padding: 12px 24px; font-size: 14px; }
-    .table-ikan { font-size: 14px; }
-    .table-ikan th { font-size: 12px; }
+    .table-ikan { font-size: 13px; }
+    .table-ikan th { font-size: 11px; }
+    .table-ikan select, .table-ikan input { font-size: 12px !important; min-height: 30px !important; height: 30px !important; }
     .batch-item { padding: 18px; }
+    .batch-item .form-control, .batch-item .form-select { font-size: 13px !important; min-height: 34px !important; height: 34px !important; }
 }
 
 /* Desktop Large */
@@ -693,41 +871,6 @@ input[type="number"]::-webkit-inner-spin-button {
     body { padding: 30px; }
     .company-text h1 { font-size: 30px; }
     .card-body { padding: 28px; }
-}
-
-/* Mobile Small */
-@media (max-width: 480px) {
-    body { padding: 6px; }
-    .company-header { padding: 12px; gap: 10px; }
-    .company-logo { width: 45px; height: 45px; }
-    .company-text h1 { font-size: 15px; }
-    .company-text p { font-size: 10px; }
-    .card-header { font-size: 13px; padding: 10px 14px; }
-    .card-body { padding: 12px; }
-    .nav-tabs .nav-link { padding: 8px 12px; font-size: 11px; }
-    .nav-tabs .nav-link i { font-size: 12px; }
-    .tab-label { font-size: 10px; }
-    .form-control, .form-select { font-size: 16px !important; padding: 6px 10px; }
-    .table-ikan { font-size: 11px; min-width: 300px; }
-    .table-ikan th { font-size: 9px; padding: 4px 2px; }
-    .table-ikan td { padding: 3px 2px; }
-    .table-ikan select, .table-ikan input { font-size: 12px !important; min-height: 30px; padding: 3px 5px !important; }
-    .btn { font-size: 12px; padding: 6px 12px; }
-    .btn-lg { font-size: 14px; padding: 8px 16px; }
-    .total-box h4 { font-size: 15px; }
-    .total-box span { font-size: 18px; }
-    .batch-summary .summary-item { font-size: 10px; padding: 2px 8px; }
-    .batch-item { padding: 10px; }
-    .batch-item .batch-number { font-size: 10px; top: -6px; left: 8px; padding: 1px 8px; }
-    .batch-actions { padding: 10px; flex-direction: column; align-items: stretch; }
-    .batch-summary { justify-content: center; }
-    .rekap-table { font-size: 10px; min-width: 400px; }
-    .rekap-table th { font-size: 9px; padding: 4px; }
-    .rekap-table td { padding: 4px; }
-    .bongkaran-header h5 { font-size: 13px; }
-    .rekap-ikan-table { font-size: 11px; }
-    .rekap-ikan-table th, .rekap-ikan-table td { padding: 4px; }
-    .master-sidebar .list-group-item { font-size: 12px; padding: 8px 12px; }
 }
 
 /* ===== PRINT ===== */
