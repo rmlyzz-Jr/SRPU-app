@@ -1,4 +1,4 @@
-/* script.js - Update lengkap dengan auto focus yang benar */
+/* script.js - VERSION FIXED 100% */
 /**
  * ============================================================
  * RPU App - Main JavaScript
@@ -18,16 +18,63 @@
     var DEFAULT_BATCH_COUNT = 5;
     var DEFAULT_ROWS_PER_BATCH = 4;
     var DEFAULT_PEMBELI = ['Pembeli 1', 'Pembeli 2', 'Pembeli 3', 'Pembeli 4', 'Pembeli 5'];
-    var isMobile = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-    var keyboardVisible = false;
-    var lastFocusedElement = null;
-    var isInitialLoad = true;
-    var isClosing = false;
 
-    // ==================== ALERT SEBELUM CLOSE/REFRESH ====================
+    // ==================== PASTI JALAN - SCROLL & FOCUS ====================
+    function pastiScrollKeAtas() {
+        // Scroll ke posisi paling atas dengan force
+        window.scrollTo(0, 0);
+        document.documentElement.scrollTop = 0;
+        document.body.scrollTop = 0;
+        $('html, body').scrollTop(0);
+    }
+
+    function pastiFocusKeElement(selector) {
+        var el = $(selector);
+        if (!el.length) return;
+        
+        // Force scroll ke elemen
+        setTimeout(function() {
+            var offset = el.offset();
+            if (offset) {
+                window.scrollTo(0, offset.top - 80);
+            }
+            // Fokus
+            el.focus();
+            if (el.is('input')) {
+                el.select();
+            }
+        }, 300);
+    }
+
+    function pastiFocusKePembeli(batchId) {
+        var selector = '#pembeli-select-' + batchId;
+        var el = $(selector);
+        if (!el.length) return;
+        
+        setTimeout(function() {
+            // Scroll ke posisi elemen
+            var offset = el.offset();
+            if (offset) {
+                window.scrollTo(0, offset.top - 80);
+            }
+            
+            // Buka Select2
+            el.select2('open');
+            
+            // Fokus ke search field
+            setTimeout(function() {
+                var searchField = document.querySelector('.select2-container--open .select2-search__field');
+                if (searchField) {
+                    searchField.focus();
+                    searchField.select();
+                }
+            }, 300);
+        }, 400);
+    }
+
+    // ==================== ALERT SEBELUM CLOSE ====================
     function confirmBeforeClose(event) {
         var hasUnsavedData = false;
-        
         if (batchItems.length > 0) {
             for (var i = 0; i < batchItems.length; i++) {
                 var batch = batchItems[i];
@@ -41,149 +88,13 @@
                 if (hasUnsavedData) break;
             }
         }
-
-        if (hasUnsavedData && !isClosing) {
+        if (hasUnsavedData) {
             event.preventDefault();
             event.returnValue = '⚠️ Ada transaksi yang belum disimpan! Yakin ingin meninggalkan halaman?';
             return event.returnValue;
         }
     }
-
     window.addEventListener('beforeunload', confirmBeforeClose);
-
-    window.addEventListener('popstate', function(event) {
-        if (batchItems.length > 0 && !isClosing) {
-            var hasData = false;
-            for (var i = 0; i < batchItems.length; i++) {
-                var batch = batchItems[i];
-                for (var j = 0; j < batch.items.length; j++) {
-                    var item = batch.items[j];
-                    if (item.jenis && item.jumlah > 0 && item.harga > 0) {
-                        hasData = true;
-                        break;
-                    }
-                }
-                if (hasData) break;
-            }
-            
-            if (hasData) {
-                var confirmClose = confirm('⚠️ Ada transaksi yang belum disimpan! Yakin ingin meninggalkan halaman?');
-                if (!confirmClose) {
-                    history.pushState(null, null, location.href);
-                } else {
-                    isClosing = true;
-                }
-            }
-        }
-    });
-
-    history.pushState(null, null, location.href);
-
-    // ==================== SCROLL TO FIELD (Mobile Keyboard Fix) ====================
-    function scrollToElement(element, delay) {
-        delay = delay || 100;
-        if (!element) return;
-        
-        var el = $(element);
-        if (!el.length) return;
-        
-        setTimeout(function() {
-            var offset = el.offset();
-            if (!offset) return;
-            
-            var windowHeight = $(window).height();
-            var elementTop = offset.top;
-            var elementHeight = el.outerHeight() || 40;
-            var keyboardHeight = isMobile ? 280 : 0;
-            var padding = 30;
-            
-            var targetScroll = elementTop - (windowHeight - elementHeight - keyboardHeight - padding);
-            
-            if (targetScroll > 0) {
-                $('html, body').animate({
-                    scrollTop: targetScroll + 80
-                }, 350);
-            } else {
-                var currentScroll = $(window).scrollTop();
-                if (elementTop - currentScroll < 60) {
-                    $('html, body').animate({
-                        scrollTop: elementTop - 100
-                    }, 300);
-                }
-            }
-        }, delay);
-    }
-
-    function focusToElement(element, delay) {
-        delay = delay || 300;
-        var el = $(element);
-        if (!el.length) return;
-        
-        setTimeout(function() {
-            // Scroll ke posisi elemen
-            scrollToElement(el, 100);
-            
-            // Fokus ke elemen
-            setTimeout(function() {
-                el.focus();
-                if (el.is('input, textarea')) {
-                    el.select();
-                }
-            }, 200);
-        }, delay);
-    }
-
-    // Deteksi fokus pada semua input/select/textarea
-    $(document).on('focus', 'input, select, textarea', function() {
-        var $this = $(this);
-        lastFocusedElement = this;
-        
-        var delay = isMobile ? 450 : 200;
-        scrollToElement($this, delay);
-        
-        if ($this.is('input[type="number"]')) {
-            setTimeout(function() {
-                $this.select();
-            }, 100);
-        }
-    });
-
-    // Untuk Select2 - fokus saat dropdown terbuka
-    $(document).on('select2:open', function(e) {
-        var $target = $(e.target);
-        var delay = isMobile ? 500 : 300;
-        
-        setTimeout(function() {
-            var searchField = $target.closest('.select2-container').find('.select2-search__field');
-            if (searchField.length) {
-                scrollToElement(searchField, 100);
-                setTimeout(function() {
-                    searchField.focus();
-                    searchField.select();
-                }, 200);
-            } else {
-                scrollToElement($target, 100);
-            }
-        }, delay);
-    });
-
-    // Deteksi perubahan ukuran window (keyboard muncul/sembunyi)
-    var lastWindowHeight = $(window).height();
-    $(window).on('resize', function() {
-        var currentHeight = $(window).height();
-        var isKeyboardOpen = currentHeight < lastWindowHeight * 0.7;
-        
-        if (isKeyboardOpen && lastFocusedElement) {
-            keyboardVisible = true;
-            setTimeout(function() {
-                scrollToElement(lastFocusedElement, 100);
-            }, 300);
-        } else if (!isKeyboardOpen && keyboardVisible) {
-            keyboardVisible = false;
-        }
-        
-        lastWindowHeight = currentHeight;
-    });
 
     // ==================== UTILITY FUNCTIONS ====================
     function formatRupiah(angka) {
@@ -497,30 +408,9 @@
         renderBatchItem(item);
         updateBatchSummary();
         
-        // Auto focus ke pembeli setelah batch ditambahkan (jika autoFocus true)
+        // PASTI FOKUS KE PEMBELI
         if (autoFocus) {
-            setTimeout(function() {
-                var pembeliSelect = $('#pembeli-select-' + batchId);
-                if (pembeliSelect.length) {
-                    // Scroll ke elemen terlebih dahulu
-                    scrollToElement(pembeliSelect, 100);
-                    
-                    // Buka Select2 setelah scroll
-                    setTimeout(function() {
-                        pembeliSelect.select2('open');
-                        
-                        // Fokus ke search field setelah dropdown terbuka
-                        setTimeout(function() {
-                            var searchField = document.querySelector('.select2-container--open .select2-search__field');
-                            if (searchField) {
-                                searchField.focus();
-                                searchField.select();
-                                scrollToElement(searchField, 100);
-                            }
-                        }, 300);
-                    }, 200);
-                }
-            }, 400);
+            pastiFocusKePembeli(batchId);
         }
         
         return item;
@@ -584,14 +474,10 @@
                     if (searchField) {
                         searchField.focus();
                         searchField.select();
-                        scrollToElement(searchField, 100);
                     }
                 }, 150);
             }, 300);
         }
-        setTimeout(function() {
-            scrollToElement(selectIkan.closest('tr'), 200);
-        }, 500);
     }
 
     function removeItemFromBatch(batchId, row) {
@@ -613,7 +499,6 @@
         if (focusInput.length) {
             setTimeout(function() {
                 focusInput.focus();
-                scrollToElement(focusInput, 200);
             }, 200);
         }
     }
@@ -794,10 +679,13 @@
             $('#tanggal').val(tanggalWIB).trigger('change');
             $('#tanggalInfo').html("📅 Menggunakan tanggal transaksi terakhir: " + formatTanggalIndonesia(tanggalWIB));
             
-            // Fokus ke tanggal setelah load
+            // PASTI SCROLL KE ATAS & FOKUS KE TANGGAL
             setTimeout(function() {
-                focusToElement('#tanggal', 500);
-            }, 600);
+                pastiScrollKeAtas();
+                setTimeout(function() {
+                    pastiFocusKeElement('#tanggal');
+                }, 300);
+            }, 500);
         } else {
             alert('⚠️ Gagal menyimpan: ' + errorMsg);
         }
@@ -870,21 +758,14 @@
                 filterData();
                 tampilkanRekapBongkaran();
                 
-                // Fokus ke tanggal setelah load selesai - TIDAK TURUN KE BAWAH
-                if (isInitialLoad) {
+                // PASTI SCROLL KE ATAS & FOKUS KE TANGGAL
+                setTimeout(function() {
+                    pastiScrollKeAtas();
                     setTimeout(function() {
-                        // Scroll ke bagian atas halaman terlebih dahulu
-                        $('html, body').animate({
-                            scrollTop: 0
-                        }, 300);
-                        
-                        // Setelah scroll ke atas, fokus ke tanggal
-                        setTimeout(function() {
-                            focusToElement('#tanggal', 200);
-                            isInitialLoad = false;
-                        }, 400);
-                    }, 800);
-                }
+                        pastiFocusKeElement('#tanggal');
+                    }, 300);
+                }, 700);
+                
             } else throw new Error(result.message || 'Gagal mengambil data');
         } catch(err) {
             $('#connectionStatus').removeClass('success').addClass('error').html('<i class="fas fa-exclamation-triangle me-2"></i> Gagal koneksi: ' + err.message).show();
