@@ -1,4 +1,4 @@
-/* script.js - VERSION FIXED 100% */
+/* script.js - VERSION FIXED 100% - ITEM TERISI COUNT */
 /**
  * ============================================================
  * RPU App - Main JavaScript
@@ -21,7 +21,6 @@
 
     // ==================== PASTI JALAN - SCROLL & FOCUS ====================
     function pastiScrollKeAtas() {
-        // Scroll ke posisi paling atas dengan force
         window.scrollTo(0, 0);
         document.documentElement.scrollTop = 0;
         document.body.scrollTop = 0;
@@ -31,14 +30,11 @@
     function pastiFocusKeElement(selector) {
         var el = $(selector);
         if (!el.length) return;
-        
-        // Force scroll ke elemen
         setTimeout(function() {
             var offset = el.offset();
             if (offset) {
                 window.scrollTo(0, offset.top - 80);
             }
-            // Fokus
             el.focus();
             if (el.is('input')) {
                 el.select();
@@ -50,18 +46,12 @@
         var selector = '#pembeli-select-' + batchId;
         var el = $(selector);
         if (!el.length) return;
-        
         setTimeout(function() {
-            // Scroll ke posisi elemen
             var offset = el.offset();
             if (offset) {
                 window.scrollTo(0, offset.top - 80);
             }
-            
-            // Buka Select2
             el.select2('open');
-            
-            // Fokus ke search field
             setTimeout(function() {
                 var searchField = document.querySelector('.select2-container--open .select2-search__field');
                 if (searchField) {
@@ -158,6 +148,19 @@
         return dateString ? convertUTCtoWIB(dateString) : '';
     }
 
+    // ==================== HELPER: Hitung item terisi ====================
+    function getTotalItemsTerisi(batch) {
+        var count = 0;
+        if (!batch || !batch.items) return 0;
+        for (var i = 0; i < batch.items.length; i++) {
+            var item = batch.items[i];
+            if (item.jenis && item.jenis.trim() !== '' && item.jumlah > 0 && item.harga > 0) {
+                count++;
+            }
+        }
+        return count;
+    }
+
     // ==================== SELECT2 SETUP ====================
     function setupStartsWithSearch(selector, autoOpen) {
         $(selector).select2({
@@ -251,18 +254,21 @@
 
     function updateBatchSummary() {
         var totalTransaksi = batchItems.length;
-        var totalItems = 0;
+        var totalItemsTerisi = 0;
         var totalNominal = 0;
+        
         for (var i = 0; i < batchItems.length; i++) {
-            totalItems += batchItems[i].items.length;
-            totalNominal += batchItems[i].total || 0;
+            var batch = batchItems[i];
+            totalItemsTerisi += getTotalItemsTerisi(batch);
+            totalNominal += batch.total || 0;
         }
+        
         $('#batchCount').text(totalTransaksi);
         $('#summaryTransaksi').text(totalTransaksi);
-        $('#summaryItem').text(totalItems);
+        $('#summaryItem').text(totalItemsTerisi);
         $('#summaryTotal').text(formatRupiah(totalNominal));
         $('#totalBatch').text(formatRupiah(totalNominal));
-        $('#batchItemCount').text(totalTransaksi + ' transaksi, ' + totalItems + ' item');
+        $('#batchItemCount').text(totalTransaksi + ' transaksi, ' + totalItemsTerisi + ' item terisi');
     }
 
     function clearBatch() {
@@ -289,9 +295,18 @@
     }
 
     function renderBatchItemHTML(item) {
+        var totalItemsTerisi = getTotalItemsTerisi(item);
+        var totalBaris = item.items.length;
+        var statusText = totalItemsTerisi + '/' + totalBaris + ' terisi';
+        var statusClass = totalItemsTerisi > 0 ? 'bg-success' : 'bg-secondary';
+        var batchIndex = batchItems.indexOf(item) + 1;
+        
         var html = '<div class="batch-item scroll-target" id="' + item.id + '">';
-        html += '<span class="batch-number">#' + (batchItems.indexOf(item) + 1) + '</span>';
+        html += '<div class="batch-header">';
+        html += '<span class="batch-number">#' + batchIndex + '</span>';
+        html += '<span class="badge ' + statusClass + ' ms-2" style="font-size:10px; padding:4px 10px;">' + statusText + '</span>';
         html += '<button type="button" class="btn btn-sm btn-danger btn-remove-batch" onclick="window.removeBatch(\'' + item.id + '\')"><i class="fas fa-times"></i></button>';
+        html += '</div>';
         
         html += '<div class="row g-1 mb-2">';
         html += '<div class="col-12 col-md-5">';
@@ -330,16 +345,18 @@
         html += '<div class="table-container"><div class="table-responsive">';
         html += '<table class="table-ikan table-sm">';
         html += '<thead><tr>';
-        html += '<th>Jenis Ikan</th>';
-        html += '<th>Jumlah (kg)</th>';
-        html += '<th>Harga (Rp/kg)</th>';
-        html += '<th>Subtotal</th>';
-        html += '<th>Aksi</th>';
+        html += '<th style="min-width:120px;">Jenis Ikan</th>';
+        html += '<th style="min-width:90px;">Jumlah (kg)</th>';
+        html += '<th style="min-width:100px;">Harga (Rp/kg)</th>';
+        html += '<th style="min-width:110px;">Subtotal</th>';
+        html += '<th style="width:40px;">Aksi</th>';
         html += '</tr></thead>';
         html += '<tbody id="itemsBody-' + item.id + '">';
         for (var i = 0; i < item.items.length; i++) {
             var row = item.items[i];
-            html += '<tr id="' + item.id + '-item-' + i + '">';
+            var isTerisi = (row.jenis && row.jenis.trim() !== '' && row.jumlah > 0 && row.harga > 0);
+            var rowClass = isTerisi ? 'row-terisi' : 'row-kosong';
+            html += '<tr id="' + item.id + '-item-' + i + '" class="' + rowClass + '">';
             html += '<td><select class="form-select form-select-sm select-ikan-batch" data-batch="' + item.id + '" data-row="' + i + '" style="width:100%;">';
             html += '<option value="">Pilih</option>';
             if (masterData.ikan && masterData.ikan.length) {
@@ -408,7 +425,6 @@
         renderBatchItem(item);
         updateBatchSummary();
         
-        // PASTI FOKUS KE PEMBELI
         if (autoFocus) {
             pastiFocusKePembeli(batchId);
         }
@@ -452,6 +468,38 @@
         
         updateBatchTotal(batchId);
         updateBatchSummary();
+        
+        // Update status badge per batch
+        updateBatchStatusBadge(batchId);
+    }
+
+    function updateBatchStatusBadge(batchId) {
+        var batch = getBatch(batchId);
+        if (!batch) return;
+        var batchElement = $('#' + batchId);
+        if (!batchElement.length) return;
+        
+        var totalItemsTerisi = getTotalItemsTerisi(batch);
+        var totalBaris = batch.items.length;
+        var statusText = totalItemsTerisi + '/' + totalBaris + ' terisi';
+        var statusClass = totalItemsTerisi > 0 ? 'bg-success' : 'bg-secondary';
+        
+        var badge = batchElement.find('.badge');
+        if (badge.length) {
+            badge.text(statusText);
+            badge.removeClass('bg-success bg-secondary').addClass(statusClass);
+        }
+        
+        // Update row styling
+        batchElement.find('tbody tr').each(function(index) {
+            var row = $(this);
+            var item = batch.items[index];
+            if (item && item.jenis && item.jenis.trim() !== '' && item.jumlah > 0 && item.harga > 0) {
+                row.removeClass('row-kosong').addClass('row-terisi');
+            } else {
+                row.removeClass('row-terisi').addClass('row-kosong');
+            }
+        });
     }
 
     function addItemToBatch(batchId) {
@@ -543,6 +591,7 @@
                     hargaInput.val(hargaDefault);
                 }
                 calculateItemSubtotal(bId, row);
+                updateBatchStatusBadge(bId);
             }
         });
 
@@ -679,7 +728,6 @@
             $('#tanggal').val(tanggalWIB).trigger('change');
             $('#tanggalInfo').html("📅 Menggunakan tanggal transaksi terakhir: " + formatTanggalIndonesia(tanggalWIB));
             
-            // PASTI SCROLL KE ATAS & FOKUS KE TANGGAL
             setTimeout(function() {
                 pastiScrollKeAtas();
                 setTimeout(function() {
@@ -758,7 +806,6 @@
                 filterData();
                 tampilkanRekapBongkaran();
                 
-                // PASTI SCROLL KE ATAS & FOKUS KE TANGGAL
                 setTimeout(function() {
                     pastiScrollKeAtas();
                     setTimeout(function() {
