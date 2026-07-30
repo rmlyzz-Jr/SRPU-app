@@ -101,9 +101,13 @@
                     </div>
                     
                     <div id="batchContainer"></div>
-                    <button type="button" class="btn-add-batch" id="btnTambahBatch">
-                        <i class="fas fa-plus me-2"></i> Tambah Transaksi Baru
-                    </button>
+                        <div class="row mb-3">
+                            <div class="col-12 text-end">
+                                <button type="button" class="btn-add-batch" id="btnTambahBatch">
+                                 <i class="fas fa-plus me-2"></i> Tambah Transaksi Baru
+                            </button>
+                        </div>
+                    </div>
                     
                     <div class="total-box">
                         <h4><i class="fas fa-calculator me-2"></i> Total Batch: <span id="totalBatch">Rp 0</span></h4>
@@ -282,20 +286,20 @@
                                         </div>
                                         <div class="row g-3 mb-3">
                                             <div class="col-6 col-md-4">
-                                                <input type="text" class="form-control" id="newIkan" placeholder="Nama ikan baru">
-                                            </div>
-                                            <div class="col-6 col-md-3">
-                                                <input type="number" class="form-control" id="newHargaIkan" placeholder="Harga (Rp/kg)" step="1000">
-                                            </div>
-                                            <div class="col-12 col-md-3">
-                                                <button class="btn btn-success w-100" id="btnTambahIkan">
-                                                    <i class="fas fa-plus me-1"></i> Tambah
-                                                </button>
-                                            </div>
-                                            <div class="col-12 col-md-2">
-                                                <div class="alert alert-info p-2 mb-0" id="ikanCount">Total: 0</div>
-                                            </div>
-                                        </div>
+                                                  <input type="text" class="form-control" id="newIkan" placeholder="Nama ikan baru">
+                                                      </div>
+                                                          <div class="col-6 col-md-3">
+                                                          <input type="number" class="form-control" id="newHargaIkan" placeholder="Harga (Rp/kg)" step="1000">
+                                                      </div>
+                                                  <div class="col-12 col-md-3">
+                                                      <button class="btn btn-success w-100" id="btnTambahIkan">
+                                                  <i class="fas fa-plus me-1"></i> Tambah
+                                              </button>
+                                          </div>
+                                          <div class="col-12 col-md-2">
+                                              <div class="alert alert-info p-2 mb-0" id="ikanCount">Total: 0</div>
+                                          </div>
+                                      </div>
                                         <hr>
                                         <div class="table-responsive" style="max-height:400px; overflow-y:auto;">
                                             <table class="table table-sm table-bordered table-hover">
