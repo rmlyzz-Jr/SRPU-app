@@ -1,4 +1,4 @@
-/* script.js - VERSION FIXED 100% - TANPA RP DOBEL */
+/* script.js - VERSION FINAL - TANPA RP DOBEL */
 /**
  * ============================================================
  * RPU App - Main JavaScript
@@ -261,7 +261,7 @@
             total += batch.items[i].subtotal || 0;
         }
         batch.total = total;
-        $('#subtotal-' + batchId).text(formatRupiah(total)); // ✅ Sudah include "Rp"
+        $('#subtotal-' + batchId).text(formatRupiah(total));
     }
 
     function updateBatchSummary() {
@@ -278,8 +278,8 @@
         $('#batchCount').text(totalTransaksi);
         $('#summaryTransaksi').text(totalTransaksi);
         $('#summaryItem').text(totalItemsTerisi);
-        $('#summaryTotal').text(formatRupiah(totalNominal)); // ✅ Sudah include "Rp"
-        $('#totalBatch').text(formatRupiah(totalNominal)); // ✅ Sudah include "Rp"
+        $('#summaryTotal').text(formatRupiah(totalNominal));
+        $('#totalBatch').text(formatRupiah(totalNominal));
         $('#batchItemCount').text(totalTransaksi + ' transaksi, ' + totalItemsTerisi + ' item terisi');
     }
 
@@ -383,7 +383,6 @@
             html += '</select></td>';
             html += '<td><input type="number" step="0.001" class="form-control form-control-sm text-end input-jumlah-batch" data-batch="' + item.id + '" data-row="' + i + '" value="' + (row.jumlah || '') + '" placeholder="0" inputmode="decimal"></td>';
             html += '<td><input type="number" class="form-control form-control-sm text-end input-harga-batch" data-batch="' + item.id + '" data-row="' + i + '" value="' + (row.harga || '') + '" placeholder="0" inputmode="numeric"></td>';
-            // ✅ Subtotal: gunakan formatRupiah() (sudah include "Rp")
             html += '<td><input type="text" class="form-control form-control-sm text-end input-subtotal-batch" data-batch="' + item.id + '" data-row="' + i + '" readonly style="background:#f0f2f5; font-weight:600; color:#2c7da0; font-size:11px;" value="' + formatRupiah(row.subtotal || 0) + '"></td>';
             html += '<td class="text-center"><button type="button" class="btn btn-danger btn-sm btn-remove-item-batch" data-batch="' + item.id + '" data-row="' + i + '" style="padding:2px 4px; font-size:9px; min-height:22px; height:22px; width:22px; border-radius:4px;"><i class="fas fa-trash-alt" style="font-size:9px;"></i></button></td>';
             html += '</tr>';
@@ -477,13 +476,11 @@
         batch.items[row].harga = harga;
         batch.items[row].subtotal = subtotal;
         
-        // ✅ Gunakan formatRupiah() (sudah include "Rp")
         subtotalInput.val(formatRupiah(subtotal));
         
         updateBatchTotal(batchId);
         updateBatchSummary();
         
-        // Update status badge per batch
         updateBatchStatusBadge(batchId);
     }
 
@@ -504,7 +501,6 @@
             badge.removeClass('bg-success bg-secondary').addClass(statusClass);
         }
         
-        // Update row styling
         batchElement.find('tbody tr').each(function(index) {
             var row = $(this);
             var item = batch.items[index];
@@ -933,7 +929,6 @@
         var html = '<div class="rekap-table-container"><table class="rekap-table"><thead><tr><th>No</th><th>Hari</th><th>Tanggal</th><th>Pembeli</th><th>Jenis Ikan</th><th>Jumlah (kg)</th><th>Harga (Rp)</th><th>Total (Rp)</th></tr></thead><tbody>';
         for (var i = 0; i < data.length; i++) {
             var item = data[i];
-            // ✅ Gunakan formatRupiah() (sudah include "Rp")
             html += '<tr><td class="text-center">' + (i+1) + '</td><td class="text-center">' + item.hari + '</td><td class="text-center">' + formatTanggalIndonesia(item.tanggal) + '</td>' +
                 '<td class="text-center">' + item.pembeli + '</td><td>' + item.jenisIkan + '</td>' +
                 '<td class="text-end">' + formatNumber(item.jumlah) + '</td>' +
@@ -1127,7 +1122,7 @@
         return true;
     }
 
-    // ==================== CETAK LAPORAN - FIXED (TANPA RP DOBEL) ====================
+    // ==================== CETAK LAPORAN - FINAL FIX (TANPA RP DOBEL) ====================
     function cetakRekap() {
         var data = [...masterData.rekap];
         var tglMulai = $('#filterTglMulai').val();
@@ -1212,7 +1207,6 @@
                     }
                     htmlContent += '<td class="text-center">' + item.jenisIkan + '</td>';
                     htmlContent += '<td class="text-center">' + formatNumber(item.jumlah) + '</td>';
-                    // ✅ Gunakan formatRupiah() (sudah include "Rp") - TANPA tambahan "Rp"
                     htmlContent += '<td class="text-start">' + formatRupiah(item.harga) + '</td>';
                     htmlContent += '<td class="text-start">' + formatRupiah(subtotal) + '</td>';
                     if (showDPColumn && i === 0) {
