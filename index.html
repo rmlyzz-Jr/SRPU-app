@@ -3,14 +3,16 @@
 <html lang="id">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
     <title>Aplikasi Rekap Ikan - PT Rafasya Putra Ustanto</title>
     
     <!-- Meta untuk PWA & SEO -->
     <meta name="description" content="Aplikasi pencatatan penjualan ikan PT Rafasya Putra Ustanto">
     <meta name="theme-color" content="#2c7da0">
-    <!-- PERBAIKAN: Ganti apple-mobile-web-app-capable dengan mobile-web-app-capable -->
+    <!-- Kedua meta ini dipertahankan: mobile-web-app-capable untuk Android/Chrome,
+         apple-mobile-web-app-capable tetap dibutuhkan iOS Safari untuk mode standalone -->
     <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="RPU Ikan">
     <link rel="manifest" href="manifest.json">
@@ -127,7 +129,6 @@
                             </button>
                         </div>
                     </div>
-                    <div id="debugInfo" class="debug-info no-print"></div>
                 </div>
             </div>
         </div>
@@ -168,8 +169,15 @@
                                 <button class="btn btn-success ms-2" id="btnCetakRekap">
                                     <i class="fas fa-print me-2"></i> Cetak
                                 </button>
+                                <button class="btn btn-outline-success ms-2" id="btnExportRekap">
+                                    <i class="fas fa-file-excel me-2"></i> Export Spreadsheet
+                                </button>
                             </div>
                         </div>
+                    </div>
+                    <div id="muatSemuaDataBox" class="alert alert-warning d-flex justify-content-between align-items-center flex-wrap gap-2 mt-3" style="display:none;">
+                        <span><i class="fas fa-info-circle me-2"></i> Untuk menjaga aplikasi tetap ringan, hanya data 30 hari terakhir yang dimuat otomatis.</span>
+                        <button class="btn btn-sm btn-warning" id="btnMuatSemuaData"><i class="fas fa-history me-2"></i> Muat Semua Data</button>
                     </div>
                     <div id="rekapTableContainer"></div>
                 </div>
@@ -272,8 +280,11 @@
                             <!-- Ikan -->
                             <div id="sectionIkan" class="master-section" style="display:none;">
                                 <div class="card mb-4 border-success">
-                                    <div class="card-header bg-success text-white">
-                                        <i class="fas fa-fish me-2"></i> Data Jenis Ikan
+                                    <div class="card-header bg-success text-white d-flex justify-content-between align-items-center flex-wrap gap-2">
+                                        <span><i class="fas fa-fish me-2"></i> Data Jenis Ikan</span>
+                                        <button class="btn btn-sm btn-outline-light" id="btnRiwayatHarga" type="button">
+                                            <i class="fas fa-history me-1"></i> Riwayat Harga
+                                        </button>
                                     </div>
                                     <div class="card-body">
                                         <div class="search-box-container">
@@ -290,7 +301,7 @@
                                                   <input type="text" class="form-control" id="newIkan" placeholder="Nama ikan baru">
                                                       </div>
                                                           <div class="col-6 col-md-3">
-                                                          <input type="number" class="form-control" id="newHargaIkan" placeholder="Harga (Rp/kg)" step="1000">
+                                                          <input type="number" min="0" class="form-control" id="newHargaIkan" placeholder="Harga (Rp/kg)" step="1000">
                                                       </div>
                                                   <div class="col-12 col-md-3">
                                                       <button class="btn btn-success w-100" id="btnTambahIkan">
@@ -302,10 +313,53 @@
                                           </div>
                                       </div>
                                         <hr>
+                                        <div class="card mb-3 border-secondary">
+                                            <div class="card-header py-2 bg-light">
+                                                <i class="fas fa-layer-group me-2"></i> Update Harga Massal
+                                            </div>
+                                            <div class="card-body py-3">
+                                                <div class="row g-2 align-items-end">
+                                                    <div class="col-12 col-md-4">
+                                                        <label class="form-label mb-1 small">Mode Perubahan</label>
+                                                        <div class="d-flex flex-wrap gap-3">
+                                                            <div class="form-check">
+                                                                <input class="form-check-input" type="radio" name="bulkHargaMode" id="modeFixed" value="fixed" checked>
+                                                                <label class="form-check-label small" for="modeFixed">Harga Tetap</label>
+                                                            </div>
+                                                            <div class="form-check">
+                                                                <input class="form-check-input" type="radio" name="bulkHargaMode" id="modePercent" value="percent">
+                                                                <label class="form-check-label small" for="modePercent">Naik/Turun %</label>
+                                                            </div>
+                                                            <div class="form-check">
+                                                                <input class="form-check-input" type="radio" name="bulkHargaMode" id="modeNominal" value="nominal">
+                                                                <label class="form-check-label small" for="modeNominal">Naik/Turun Rp</label>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <div class="col-6 col-md-3">
+                                                        <label class="form-label mb-1 small">Nilai</label>
+                                                        <input type="number" class="form-control form-control-sm" id="bulkHargaNilai" placeholder="mis. 15000 atau -5">
+                                                    </div>
+                                                    <div class="col-6 col-md-3">
+                                                        <button class="btn btn-sm btn-warning w-100" id="btnTerapkanBulkHarga" type="button">
+                                                            <i class="fas fa-bolt me-1"></i> Terapkan ke Terpilih
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                                <div class="small text-muted mt-2">💡 Centang ikan pada tabel di bawah, lalu pilih mode: <strong>Harga Tetap</strong> (semua ikan terpilih diset ke nilai yang sama), <strong>Naik/Turun %</strong> (mis. isi 10 untuk naik 10%, -10 untuk turun 10%), atau <strong>Naik/Turun Rp</strong> (mis. isi 2000 atau -2000).</div>
+                                            </div>
+                                        </div>
                                         <div class="table-responsive" style="max-height:400px; overflow-y:auto;">
                                             <table class="table table-sm table-bordered table-hover">
                                                 <thead class="table-light sticky-top">
-                                                    <tr><th style="width:50px">No</th><th>Nama Ikan</th><th>Harga (Rp/kg)</th><th style="width:100px">Aksi</th></tr>
+                                                    <tr>
+                                                        <th style="width:40px"><input type="checkbox" id="chkSelectAllIkan"></th>
+                                                        <th style="width:40px">No</th>
+                                                        <th>Nama Ikan</th>
+                                                        <th>Harga (Rp/kg)</th>
+                                                        <th style="width:110px">Terakhir Update</th>
+                                                        <th style="width:70px">Aksi</th>
+                                                    </tr>
                                                 </thead>
                                                 <tbody id="listIkan"></tbody>
                                             </table>
@@ -355,10 +409,37 @@
     </div>
 </div>
 
+<!-- MODAL RIWAYAT HARGA -->
+<div class="modal fade" id="modalRiwayatHarga" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fas fa-history me-2"></i> Riwayat Perubahan Harga Ikan</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-secondary small mb-3">
+                    <i class="fas fa-info-circle me-1"></i> Riwayat ini tersimpan di perangkat/browser ini saja (belum tersinkron ke server).
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-sm table-bordered">
+                        <thead class="table-light">
+                            <tr><th style="width:40px">No</th><th>Nama Ikan</th><th>Perubahan Harga</th><th style="width:150px">Waktu</th></tr>
+                        </thead>
+                        <tbody id="riwayatHargaBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- ==================== SCRIPTS ==================== -->
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+<!-- SheetJS: dipakai untuk fitur Export Spreadsheet (.xlsx) di Tab Rekap Data -->
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 
 <!-- Custom JavaScript -->
 <script src="script.js"></script>
