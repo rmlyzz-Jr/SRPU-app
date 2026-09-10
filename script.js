@@ -12,12 +12,93 @@
     // ==================== KONFIGURASI ====================
     var SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwBhvO1gmUN2TxZEK-cyAdRNOFWtStfBU6rA6D6eJcITYgT74uENkfN1H-LHPV14M6M/exec";
     var masterData = { pembeli: [], ikan: [], bongkaran: [], rekap: [], metodePembayaran: [] };
+    var masterDataFull = null; // cache seluruh histori transaksi (dipakai saat "Muat Semua Data")
+    var isFullHistoryLoaded = false;
     var batchItems = [];
     var batchCounter = 0;
     var dbConnected = false;
     var DEFAULT_BATCH_COUNT = 5;
     var DEFAULT_ROWS_PER_BATCH = 4;
     var DEFAULT_PEMBELI = ['Pembeli 1', 'Pembeli 2', 'Pembeli 3', 'Pembeli 4', 'Pembeli 5'];
+    var DEFAULT_LOAD_DAYS = 30; // hanya load N hari terakhir saat pertama buka aplikasi
+    var LS_PRICE_HISTORY_KEY = 'rpu_riwayatHargaIkan';
+    var LS_LAST_UPDATE_KEY = 'rpu_lastUpdateIkan';
+
+    // ==================== HELPER: RIWAYAT HARGA (LOCAL) ====================
+    // Catatan: histori ini tersimpan di browser (localStorage) masing-masing perangkat,
+    // bukan di server. Untuk audit terpusat di semua perangkat, tambahkan penyimpanan
+    // riwayat harga di sisi Apps Script (mis. sheet "RiwayatHarga").
+    function getPriceHistory() {
+        try {
+            return JSON.parse(localStorage.getItem(LS_PRICE_HISTORY_KEY) || '[]');
+        } catch (e) { return []; }
+    }
+    function addPriceHistory(nama, hargaLama, hargaBaru) {
+        try {
+            var hist = getPriceHistory();
+            hist.unshift({
+                nama: nama,
+                hargaLama: hargaLama,
+                hargaBaru: hargaBaru,
+                waktu: new Date().toISOString()
+            });
+            if (hist.length > 500) hist = hist.slice(0, 500);
+            localStorage.setItem(LS_PRICE_HISTORY_KEY, JSON.stringify(hist));
+
+            var lastUpdate = {};
+            try { lastUpdate = JSON.parse(localStorage.getItem(LS_LAST_UPDATE_KEY) || '{}'); } catch(e2) {}
+            lastUpdate[nama] = new Date().toISOString();
+            localStorage.setItem(LS_LAST_UPDATE_KEY, JSON.stringify(lastUpdate));
+        } catch (e) { /* localStorage tidak tersedia, abaikan */ }
+    }
+    function getLastUpdateMap() {
+        try { return JSON.parse(localStorage.getItem(LS_LAST_UPDATE_KEY) || '{}'); } catch(e) { return {}; }
+    }
+    function formatWaktuSingkat(isoString) {
+        if (!isoString) return '-';
+        var d = new Date(isoString);
+        if (isNaN(d.getTime())) return '-';
+        var dd = String(d.getDate()).padStart(2,'0');
+        var mm = String(d.getMonth()+1).padStart(2,'0');
+        var yy = d.getFullYear();
+        var hh = String(d.getHours()).padStart(2,'0');
+        var mi = String(d.getMinutes()).padStart(2,'0');
+        return dd + '/' + mm + '/' + yy + ' ' + hh + ':' + mi;
+    }
+
+    // ==================== HELPER: KOMUNIKASI KE BACKEND (FIX no-cors) ====================
+    // PENTING: sebelumnya semua request memakai mode:"no-cors" sehingga response TIDAK PERNAH
+    // bisa dibaca oleh browser -> aplikasi selalu menganggap request berhasil walau backend gagal.
+    // Perbaikan: gunakan fetch biasa (bukan no-cors) dan kirim body sebagai text/plain agar
+    // Google Apps Script tidak memicu CORS preflight (OPTIONS) yang tidak didukung Apps Script.
+    // Apps Script tetap bisa membaca body dengan JSON.parse(e.postData.contents) seperti biasa.
+    async function postToServer(payload) {
+        var response;
+        try {
+            response = await fetch(SCRIPT_URL, {
+                method: "POST",
+                headers: { "Content-Type": "text/plain;charset=utf-8" },
+                body: JSON.stringify(payload)
+            });
+        } catch (networkErr) {
+            throw new Error('Tidak bisa terhubung ke server. Periksa koneksi internet Anda. (' + networkErr.message + ')');
+        }
+        if (!response.ok) {
+            throw new Error('Server merespon dengan error (HTTP ' + response.status + ')');
+        }
+        var text = await response.text();
+        var result;
+        try {
+            result = JSON.parse(text);
+        } catch (parseErr) {
+            // Backend tidak mengembalikan JSON yang valid
+            throw new Error('Respon server tidak dikenali. Pastikan Apps Script mengembalikan JSON.');
+        }
+        if (result && (result.status === 'error' || result.status === 'gagal')) {
+            throw new Error(result.message || 'Server menolak permintaan.');
+        }
+        return result;
+    }
 
     // ==================== FORMAT RUPIAH - FIXED (TANPA DUPLIKASI) ====================
     
@@ -699,22 +780,17 @@
                 if (!item.jenis || item.jumlah <= 0 || item.harga <= 0) continue;
                 var dpForItem = (j === 0) ? dpValue : 0;
                 try {
-                    await fetch(SCRIPT_URL, {
-                        method: "POST",
-                        mode: "no-cors",
-                        headers: {"Content-Type": "application/json"},
-                        body: JSON.stringify({
-                            tanggal: tanggalUTC,
-                            hari: hari,
-                            pembeli: batch.pembeli,
-                            jenisIkan: item.jenis,
-                            jumlah: item.jumlah,
-                            harga: item.harga,
-                            total: item.subtotal,
-                            dp: dpForItem,
-                            bongkaran: bongkaranValue,
-                            metodePembayaran: batch.metode
-                        })
+                    await postToServer({
+                        tanggal: tanggalUTC,
+                        hari: hari,
+                        pembeli: batch.pembeli,
+                        jenisIkan: item.jenis,
+                        jumlah: item.jumlah,
+                        harga: item.harga,
+                        total: item.subtotal,
+                        dp: dpForItem,
+                        bongkaran: bongkaranValue,
+                        metodePembayaran: batch.metode
                     });
                     totalSaved++;
                 } catch(err) {
@@ -750,17 +826,41 @@
     }
 
     // ==================== LOAD DATA ====================
-    async function loadAllData() {
+    function getTodayStr() {
+        var today = new Date();
+        return today.getFullYear() + '-' + String(today.getMonth()+1).padStart(2,'0') + '-' + String(today.getDate()).padStart(2,'0');
+    }
+
+    function getDateNDaysAgoStr(n) {
+        var d = new Date();
+        d.setDate(d.getDate() - n);
+        return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+    }
+
+    // loadAllData(fullHistory) - fullHistory=false (default): hanya menampung 30 hari terakhir
+    // di memori agar tabel & filter tetap ringan. fullHistory=true: muat seluruh histori.
+    async function loadAllData(fullHistory) {
+        fullHistory = !!fullHistory;
         try {
             $('#connectionStatus').removeClass('error success').addClass('success').html('<div class="loading-spinner"></div> Menghubungkan ke database...').show();
-            var response = await fetch(SCRIPT_URL);
+
+            // Catatan: parameter query di bawah ini bersifat opsional. Jika backend
+            // Apps Script (doGet) belum mendukungnya, parameter akan diabaikan dan
+            // seluruh data tetap dikirim seperti biasa (tidak akan error).
+            var url = SCRIPT_URL;
+            if (!fullHistory) {
+                var sep = url.indexOf('?') === -1 ? '?' : '&';
+                url += sep + 'tglMulai=' + getDateNDaysAgoStr(DEFAULT_LOAD_DAYS) + '&tglSelesai=' + getTodayStr();
+            }
+
+            var response = await fetch(url);
             var result = await response.json();
             if (result.status === 'success') {
                 masterData.pembeli = result.pembeli || [];
                 masterData.ikan = result.ikan || [];
                 masterData.bongkaran = result.bongkaran || [];
                 masterData.metodePembayaran = result.metodePembayaran || ['Non Kontan','Kontan','Transfer','Tempo'];
-                masterData.rekap = (result.rekap || []).map(function(item) {
+                var rekapAll = (result.rekap || []).map(function(item) {
                     var newItem = Object.assign({}, item);
                     if (newItem.tanggal) {
                         newItem.tanggal_utc = newItem.tanggal;
@@ -772,13 +872,28 @@
                     if (newItem.dp === undefined) newItem.dp = 0;
                     return newItem;
                 });
-                masterData.rekap.sort(function(a,b) { return a.tanggal > b.tanggal ? -1 : a.tanggal < b.tanggal ? 1 : 0; });
-                var today = new Date();
-                var todayStr = today.getFullYear() + '-' + String(today.getMonth()+1).padStart(2,'0') + '-' + String(today.getDate()).padStart(2,'0');
+                rekapAll.sort(function(a,b) { return a.tanggal > b.tanggal ? -1 : a.tanggal < b.tanggal ? 1 : 0; });
+
+                // Jika backend TIDAK mendukung filter tanggal via query, rekapAll masih berisi
+                // semua data. Kita tetap potong di sisi client supaya render & memori ringan,
+                // kecuali user secara eksplisit meminta "Muat Semua Data".
+                if (fullHistory) {
+                    masterData.rekap = rekapAll;
+                    isFullHistoryLoaded = true;
+                } else {
+                    var cutoff = getDateNDaysAgoStr(DEFAULT_LOAD_DAYS);
+                    masterData.rekap = rekapAll.filter(function(item) {
+                        return item.tanggal >= cutoff;
+                    });
+                    isFullHistoryLoaded = (masterData.rekap.length === rekapAll.length);
+                }
+                masterDataFull = rekapAll;
+
+                var todayStr = getTodayStr();
                 var defaultDate = todayStr;
                 var infoText = "📅 Menggunakan tanggal hari ini (belum ada transaksi)";
-                if (masterData.rekap.length > 0) {
-                    var lastTransactionDate = masterData.rekap[0].tanggal;
+                if (masterDataFull.length > 0) {
+                    var lastTransactionDate = masterDataFull[0].tanggal;
                     if (lastTransactionDate) {
                         defaultDate = lastTransactionDate;
                         infoText = "📅 Menggunakan tanggal transaksi terakhir: " + formatTanggalIndonesia(lastTransactionDate);
@@ -786,7 +901,6 @@
                 }
                 $('#tanggal').val(defaultDate).trigger('change');
                 $('#tanggalInfo').html(infoText);
-                $('#debugInfo').html("✅ Data berhasil dimuat. Ikan: " + masterData.ikan.length + ", Pembeli: " + masterData.pembeli.length + ", Bongkaran: " + masterData.bongkaran.length + ", Transaksi: " + masterData.rekap.length);
                 var metodeSelect = $('#metodePembayaranBatch');
                 metodeSelect.empty();
                 if (masterData.metodePembayaran && masterData.metodePembayaran.length) {
@@ -810,9 +924,13 @@
                 refreshMasterDisplay();
                 $('#connectionStatus').html('<i class="fas fa-check-circle me-2"></i> Database terhubung!').fadeIn().delay(2000).fadeOut();
                 dbConnected = true;
-                $('#filterTglMulai').val(todayStr);
-                $('#filterTglSelesai').val(todayStr);
+
+                if (!fullHistory) {
+                    $('#filterTglMulai').val(getDateNDaysAgoStr(DEFAULT_LOAD_DAYS));
+                    $('#filterTglSelesai').val(todayStr);
+                }
                 $('#bongkaranTanggalSelect').val(todayStr);
+                updateMuatSemuaDataBanner();
                 filterData();
                 tampilkanRekapBongkaran();
                 
@@ -826,9 +944,26 @@
             } else throw new Error(result.message || 'Gagal mengambil data');
         } catch(err) {
             $('#connectionStatus').removeClass('success').addClass('error').html('<i class="fas fa-exclamation-triangle me-2"></i> Gagal koneksi: ' + err.message).show();
-            $('#debugInfo').html("❌ Error: " + err.message + "<br><br>🔗 Pastikan URL Web App sudah benar");
             dbConnected = false;
         }
+    }
+
+    // Tampilkan info/tombol "Muat Semua Data" bila data yang aktif baru sebagian (30 hari terakhir)
+    function updateMuatSemuaDataBanner() {
+        var box = $('#muatSemuaDataBox');
+        if (!box.length) return;
+        if (isFullHistoryLoaded) {
+            box.hide();
+        } else {
+            box.show();
+        }
+    }
+
+    async function muatSemuaData() {
+        var btn = $('#btnMuatSemuaData');
+        btn.prop('disabled', true).html('<div class="loading-spinner"></div> Memuat seluruh histori...');
+        await loadAllData(true);
+        btn.prop('disabled', false).html('<i class="fas fa-history me-2"></i> Muat Semua Data');
     }
 
     // ==================== FILTER FUNCTIONS ====================
@@ -910,6 +1045,8 @@
         }
     }
 
+    var lastFilteredRekap = [];
+
     function filterData() {
         var filtered = masterData.rekap.slice();
         var tglMulai = $('#filterTglMulai').val();
@@ -920,7 +1057,61 @@
         if (tglSelesai) filtered = filtered.filter(function(i) { return i.tanggal <= tglSelesai; });
         if (pembeli && pembeli !== 'all') filtered = filtered.filter(function(i) { return i.pembeli === pembeli; });
         if (metode && metode !== 'all') filtered = filtered.filter(function(i) { return i.metodePembayaran === metode; });
+        lastFilteredRekap = filtered;
         displayRekapTable(filtered);
+    }
+
+    // ==================== EXPORT KE SPREADSHEET (EXCEL / CSV) ====================
+    function exportRekapKeSpreadsheet() {
+        if (!lastFilteredRekap.length) {
+            alert('Tidak ada data untuk diexport. Silakan tampilkan data terlebih dahulu.');
+            return;
+        }
+        var rows = lastFilteredRekap.map(function(item, idx) {
+            return {
+                'No': idx + 1,
+                'Hari': item.hari,
+                'Tanggal': formatTanggalIndonesia(item.tanggal),
+                'Pembeli': item.pembeli,
+                'Jenis Ikan': item.jenisIkan,
+                'Jumlah (kg)': item.jumlah,
+                'Harga (Rp)': item.harga,
+                'Total (Rp)': item.total,
+                'DP (Rp)': item.dp || 0,
+                'Bongkaran': item.bongkaran || '-',
+                'Metode Bayar': item.metodePembayaran || '-'
+            };
+        });
+        var grandTotal = lastFilteredRekap.reduce(function(sum, it) { return sum + (it.total || 0); }, 0);
+        rows.push({ 'No': '', 'Hari': '', 'Tanggal': '', 'Pembeli': '', 'Jenis Ikan': '', 'Jumlah (kg)': '', 'Harga (Rp)': '', 'Total (Rp)': grandTotal, 'DP (Rp)': '', 'Bongkaran': '', 'Metode Bayar': 'GRAND TOTAL' });
+
+        var tglMulai = $('#filterTglMulai').val() || 'awal';
+        var tglSelesai = $('#filterTglSelesai').val() || 'akhir';
+        var filename = 'Rekap_Ikan_RPU_' + tglMulai + '_sd_' + tglSelesai;
+
+        if (window.XLSX) {
+            var ws = XLSX.utils.json_to_sheet(rows);
+            var wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, 'Rekap Penjualan');
+            XLSX.writeFile(wb, filename + '.xlsx');
+        } else {
+            // Fallback CSV bila library SheetJS gagal dimuat (mis. tidak ada internet)
+            var headers = Object.keys(rows[0]);
+            var csv = headers.join(';') + '\n';
+            rows.forEach(function(r) {
+                csv += headers.map(function(h) {
+                    var v = (r[h] === undefined || r[h] === null) ? '' : String(r[h]);
+                    return '"' + v.replace(/"/g, '""') + '"';
+                }).join(';') + '\n';
+            });
+            var blob = new Blob(["\uFEFF" + csv], { type: 'text/csv;charset=utf-8;' });
+            var link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = filename + '.csv';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
     }
 
     function displayRekapTable(data) {
@@ -1023,25 +1214,34 @@
                 return nama.toLowerCase().indexOf(lowerFilter) !== -1;
             });
         }
+        var lastUpdateMap = getLastUpdateMap();
         if (dataToShow.length) {
             for (var i = 0; i < dataToShow.length; i++) {
                 var item = dataToShow[i];
                 var nama = typeof item === 'object' ? (item.nama || item) : item;
                 var harga = typeof item === 'object' ? (item.hargaDefault || item.harga || 0) : 0;
-                tbody.append('<tr><td class="text-center">' + (i+1) + '</td><td>' + nama + '</td>' +
-                    '<td><input type="number" class="form-control form-control-sm harga-edit" data-ikan="' + nama + '" value="' + harga + '" step="500" style="width:120px;display:inline-block">' +
+                var lastUpdate = lastUpdateMap[nama] ? formatWaktuSingkat(lastUpdateMap[nama]) : '-';
+                tbody.append('<tr>' +
+                    '<td class="text-center"><input type="checkbox" class="chk-ikan-bulk" data-ikan="' + nama + '" data-harga="' + harga + '"></td>' +
+                    '<td class="text-center">' + (i+1) + '</td>' +
+                    '<td>' + nama + '</td>' +
+                    '<td><input type="number" min="0" class="form-control form-control-sm harga-edit" data-ikan="' + nama + '" data-harga-lama="' + harga + '" value="' + harga + '" step="500" style="width:110px;display:inline-block">' +
                     '<button class="btn btn-sm btn-primary btn-update-harga" data-ikan="' + nama + '"><i class="fas fa-save"></i></button></td>' +
+                    '<td class="text-center small text-muted">' + lastUpdate + '</td>' +
                     '<td class="text-center"><button class="btn btn-sm btn-danger btn-delete-ikan" data-ikan="' + nama + '"><i class="fas fa-trash"></i></button></td></tr>');
             }
         } else {
-            tbody.append('<tr><td colspan="4" class="text-center text-muted">Tidak ada data untuk "' + filterText + '"</td></tr>');
+            tbody.append('<tr><td colspan="6" class="text-center text-muted">Tidak ada data untuk "' + filterText + '"</td></tr>');
         }
         $('#ikanCount').text('Total: ' + dataToShow.length + ' / ' + masterData.ikan.length);
+        $('#chkSelectAllIkan').prop('checked', false);
         $('.btn-update-harga').off('click').on('click', async function() {
-            await updateHargaIkan($(this).data('ikan'), $(this).closest('tr').find('.harga-edit').val());
+            var row = $(this).closest('tr');
+            var hargaLama = parseFloat(row.find('.harga-edit').data('harga-lama')) || 0;
+            await updateHargaIkan($(this).data('ikan'), row.find('.harga-edit').val(), hargaLama, this);
         });
         $('.btn-delete-ikan').off('click').on('click', async function() {
-            if (confirm('Hapus ikan "' + $(this).data('ikan') + '"?')) await deleteIkan($(this).data('ikan'));
+            if (confirm('Hapus ikan "' + $(this).data('ikan') + '"? Tindakan ini tidak bisa dibatalkan.')) await deleteIkan($(this).data('ikan'));
         });
     }
 
@@ -1076,50 +1276,197 @@
 
     // ==================== MASTER CRUD ====================
     async function tambahPembeli(nama) {
-        if (!nama.trim()) return false;
-        await fetch(SCRIPT_URL, { method: "POST", mode: "no-cors", body: JSON.stringify({ action: "addPembeli", nama: nama }) });
-        await loadAllData();
-        refreshMasterDisplay();
-        return true;
+        if (!nama || !nama.trim()) { alert('Nama pembeli tidak boleh kosong!'); return false; }
+        try {
+            await postToServer({ action: "addPembeli", nama: nama.trim() });
+            await loadAllData(isFullHistoryLoaded);
+            refreshMasterDisplay();
+            return true;
+        } catch (err) {
+            alert('⚠️ Gagal menambah pembeli: ' + err.message);
+            return false;
+        }
     }
 
     async function tambahIkan(nama, harga) {
-        if (!nama.trim()) return false;
-        await fetch(SCRIPT_URL, { method: "POST", mode: "no-cors", body: JSON.stringify({ action: "addIkan", nama: nama, harga: parseFloat(harga) || 0 }) });
-        await loadAllData();
-        refreshMasterDisplay();
-        return true;
+        if (!nama || !nama.trim()) { alert('Nama ikan tidak boleh kosong!'); return false; }
+        var hargaNum = parseFloat(harga);
+        if (harga === '' || harga === undefined || harga === null || isNaN(hargaNum) || hargaNum <= 0) {
+            alert('⚠️ Harga ikan wajib diisi dan harus lebih dari 0!');
+            return false;
+        }
+        try {
+            await postToServer({ action: "addIkan", nama: nama.trim(), harga: hargaNum });
+            await loadAllData(isFullHistoryLoaded);
+            refreshMasterDisplay();
+            return true;
+        } catch (err) {
+            alert('⚠️ Gagal menambah ikan: ' + err.message);
+            return false;
+        }
     }
 
-    async function updateHargaIkan(nama, hargaBaru) {
-        await fetch(SCRIPT_URL, { method: "POST", mode: "no-cors", body: JSON.stringify({ action: "updateHargaIkan", nama: nama, harga: parseFloat(hargaBaru) || 0 }) });
-        await loadAllData();
-        refreshMasterDisplay();
-        return true;
+    async function updateHargaIkan(nama, hargaBaru, hargaLama, btnElement) {
+        var hargaNum = parseFloat(hargaBaru);
+        if (hargaBaru === '' || hargaBaru === undefined || hargaBaru === null || isNaN(hargaNum) || hargaNum <= 0) {
+            alert('⚠️ Harga baru wajib diisi dan harus lebih dari 0! Update dibatalkan.');
+            return false;
+        }
+        if (!confirm('Update harga "' + nama + '" dari Rp ' + formatNumber(hargaLama || 0) + ' menjadi Rp ' + formatNumber(hargaNum) + '?')) {
+            return false;
+        }
+        var originalHtml = btnElement ? $(btnElement).html() : null;
+        if (btnElement) $(btnElement).prop('disabled', true).html('<div class="loading-spinner"></div>');
+        try {
+            await postToServer({ action: "updateHargaIkan", nama: nama, harga: hargaNum });
+            addPriceHistory(nama, hargaLama || 0, hargaNum);
+            await loadAllData(isFullHistoryLoaded);
+            refreshMasterDisplay();
+            return true;
+        } catch (err) {
+            alert('⚠️ Gagal update harga: ' + err.message);
+            if (btnElement && originalHtml !== null) $(btnElement).prop('disabled', false).html(originalHtml);
+            return false;
+        }
     }
 
     async function deleteIkan(nama) {
-        await fetch(SCRIPT_URL, { method: "POST", mode: "no-cors", body: JSON.stringify({ action: "deleteIkan", nama: nama }) });
-        await loadAllData();
-        refreshMasterDisplay();
-        return true;
+        try {
+            await postToServer({ action: "deleteIkan", nama: nama });
+            await loadAllData(isFullHistoryLoaded);
+            refreshMasterDisplay();
+            return true;
+        } catch (err) {
+            alert('⚠️ Gagal menghapus ikan: ' + err.message);
+            return false;
+        }
     }
 
     async function tambahBongkaran(nama) {
-        if (!nama.trim()) return false;
-        await fetch(SCRIPT_URL, { method: "POST", mode: "no-cors", body: JSON.stringify({ action: "addBongkaran", nama: nama }) });
-        await loadAllData();
-        refreshMasterDisplay();
-        updateBongkaranDatalist();
-        return true;
+        if (!nama || !nama.trim()) { alert('Nama bongkaran tidak boleh kosong!'); return false; }
+        try {
+            await postToServer({ action: "addBongkaran", nama: nama.trim() });
+            await loadAllData(isFullHistoryLoaded);
+            refreshMasterDisplay();
+            updateBongkaranDatalist();
+            return true;
+        } catch (err) {
+            alert('⚠️ Gagal menambah bongkaran: ' + err.message);
+            return false;
+        }
     }
 
     async function deleteBongkaran(nama) {
-        await fetch(SCRIPT_URL, { method: "POST", mode: "no-cors", body: JSON.stringify({ action: "deleteBongkaran", nama: nama }) });
-        await loadAllData();
+        try {
+            await postToServer({ action: "deleteBongkaran", nama: nama });
+            await loadAllData(isFullHistoryLoaded);
+            refreshMasterDisplay();
+            updateBongkaranDatalist();
+            return true;
+        } catch (err) {
+            alert('⚠️ Gagal menghapus bongkaran: ' + err.message);
+            return false;
+        }
+    }
+
+    // ==================== UPDATE HARGA MASSAL (BULK) ====================
+    function getSelectedIkanForBulk() {
+        var selected = [];
+        $('.chk-ikan-bulk:checked').each(function() {
+            selected.push({
+                nama: $(this).data('ikan'),
+                hargaLama: parseFloat($(this).data('harga')) || 0
+            });
+        });
+        return selected;
+    }
+
+    function hitungHargaBaruBulk(hargaLama, mode, nilai) {
+        var n = parseFloat(nilai) || 0;
+        if (mode === 'fixed') return n;
+        if (mode === 'percent') return Math.max(0, Math.round(hargaLama + (hargaLama * n / 100)));
+        if (mode === 'nominal') return Math.max(0, hargaLama + n);
+        return hargaLama;
+    }
+
+    async function terapkanUpdateHargaMassal() {
+        var selected = getSelectedIkanForBulk();
+        if (!selected.length) {
+            alert('Pilih minimal 1 jenis ikan terlebih dahulu (centang pada daftar ikan)!');
+            return;
+        }
+        var mode = $('input[name="bulkHargaMode"]:checked').val() || 'fixed';
+        var nilai = $('#bulkHargaNilai').val();
+        var nilaiNum = parseFloat(nilai);
+        if (nilai === '' || nilai === undefined || isNaN(nilaiNum)) {
+            alert('⚠️ Masukkan nilai harga/persentase terlebih dahulu!');
+            return;
+        }
+        if (mode === 'fixed' && nilaiNum <= 0) {
+            alert('⚠️ Harga tetap harus lebih dari 0!');
+            return;
+        }
+
+        // Preview singkat sebelum konfirmasi
+        var previewLines = selected.slice(0, 5).map(function(it) {
+            var baru = hitungHargaBaruBulk(it.hargaLama, mode, nilaiNum);
+            return '- ' + it.nama + ': Rp ' + formatNumber(it.hargaLama) + ' → Rp ' + formatNumber(baru);
+        }).join('\n');
+        var more = selected.length > 5 ? '\n... dan ' + (selected.length - 5) + ' ikan lainnya' : '';
+        if (!confirm('Update harga massal untuk ' + selected.length + ' jenis ikan?\n\n' + previewLines + more)) {
+            return;
+        }
+
+        var btn = $('#btnTerapkanBulkHarga');
+        var originalHtml = btn.html();
+        btn.prop('disabled', true);
+        var sukses = 0, gagal = 0, gagalNama = [];
+
+        for (var i = 0; i < selected.length; i++) {
+            var it = selected[i];
+            var hargaBaru = hitungHargaBaruBulk(it.hargaLama, mode, nilaiNum);
+            btn.html('<div class="loading-spinner"></div> Memperbarui ' + (i+1) + '/' + selected.length + '...');
+            try {
+                await postToServer({ action: "updateHargaIkan", nama: it.nama, harga: hargaBaru });
+                addPriceHistory(it.nama, it.hargaLama, hargaBaru);
+                sukses++;
+            } catch (err) {
+                gagal++;
+                gagalNama.push(it.nama);
+            }
+        }
+
+        btn.prop('disabled', false).html(originalHtml);
+        await loadAllData(isFullHistoryLoaded);
         refreshMasterDisplay();
-        updateBongkaranDatalist();
-        return true;
+        $('#bulkHargaNilai').val('');
+
+        if (gagal === 0) {
+            alert('✓ Berhasil update harga ' + sukses + ' jenis ikan!');
+        } else {
+            alert('⚠️ ' + sukses + ' berhasil, ' + gagal + ' gagal (' + gagalNama.join(', ') + ')');
+        }
+    }
+
+    // ==================== RIWAYAT HARGA (MODAL SEDERHANA) ====================
+    function tampilkanRiwayatHarga() {
+        var hist = getPriceHistory();
+        var body = $('#riwayatHargaBody');
+        body.empty();
+        if (!hist.length) {
+            body.html('<tr><td colspan="4" class="text-center text-muted">Belum ada riwayat perubahan harga di perangkat ini</td></tr>');
+        } else {
+            hist.forEach(function(h, idx) {
+                body.append('<tr><td class="text-center">' + (idx+1) + '</td><td>' + h.nama + '</td>' +
+                    '<td class="text-end">Rp ' + formatNumber(h.hargaLama) + ' → Rp ' + formatNumber(h.hargaBaru) + '</td>' +
+                    '<td class="text-center">' + formatWaktuSingkat(h.waktu) + '</td></tr>');
+            });
+        }
+        var modalEl = document.getElementById('modalRiwayatHarga');
+        if (modalEl && window.bootstrap) {
+            var modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+            modal.show();
+        }
     }
 
     // ==================== CETAK LAPORAN - FINAL FIX (TANPA RP DOBEL) ====================
@@ -1282,10 +1629,17 @@
         $('#btnSimpanBatch').on('click', saveBatch);
         $('#btnFilterData').on('click', filterData);
         $('#btnCetakRekap').on('click', cetakRekap);
+        $('#btnExportRekap').on('click', exportRekapKeSpreadsheet);
+        $('#btnMuatSemuaData').on('click', muatSemuaData);
         $('#btnTampilkanRekapBongkaran').on('click', tampilkanRekapBongkaran);
         $('#btnCetakRekapBongkaran').on('click', cetakRekapBongkaran);
         $('#searchIkan').on('keyup', function() { displayIkanList($(this).val()); });
         $('#resetSearchIkan').on('click', function() { $('#searchIkan').val(''); displayIkanList(''); });
+        $('#btnRiwayatHarga').on('click', tampilkanRiwayatHarga);
+        $('#btnTerapkanBulkHarga').on('click', terapkanUpdateHargaMassal);
+        $(document).on('change', '#chkSelectAllIkan', function() {
+            $('.chk-ikan-bulk').prop('checked', $(this).is(':checked'));
+        });
 
         // Master data buttons
         $(document).on('click', '#btnTambahPembeli', async function() {
