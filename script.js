@@ -741,6 +741,33 @@
         });
     }
 
+    // ==================== MODAL PROGRESS SIMPAN BATCH ====================
+    function tampilkanModalProgressSimpan() {
+        $('#progressSimpanCounter').text('0 / 0');
+        $('#progressSimpanBar').css('width', '0%').attr('aria-valuenow', 0).text('0%');
+        $('#progressSimpanDetail').html('<i class="fas fa-sync fa-spin me-1"></i> Mempersiapkan data...');
+        var modalEl = document.getElementById('modalProgressSimpan');
+        if (modalEl) {
+            var modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+            modal.show();
+        }
+    }
+
+    function updateModalProgressSimpan(current, total, detailHtml) {
+        var persen = total > 0 ? Math.round((current / total) * 100) : 0;
+        $('#progressSimpanCounter').text(current + ' / ' + total);
+        $('#progressSimpanBar').css('width', persen + '%').attr('aria-valuenow', persen).text(persen + '%');
+        $('#progressSimpanDetail').html(detailHtml);
+    }
+
+    function sembunyikanModalProgressSimpan() {
+        var modalEl = document.getElementById('modalProgressSimpan');
+        if (modalEl) {
+            var modal = bootstrap.Modal.getInstance(modalEl);
+            if (modal) modal.hide();
+        }
+    }
+
     // ==================== SAVE BATCH ====================
     async function saveBatch() {
         if (!dbConnected) { alert('Database belum siap.'); return; }
@@ -766,8 +793,19 @@
             if (batch.dp > batch.total) { alert('Transaksi #' + (i+1) + ': DP tidak boleh lebih besar dari total belanja!'); valid = false; break; }
         }
         if (!valid) return;
+
+        // Hitung dulu total item yang benar-benar akan disimpan, untuk progress bar
+        var totalItemUntukDisimpan = 0;
+        for (var i = 0; i < batchItems.length; i++) {
+            for (var j = 0; j < batchItems[i].items.length; j++) {
+                var it = batchItems[i].items[j];
+                if (it.jenis && it.jumlah > 0 && it.harga > 0) totalItemUntukDisimpan++;
+            }
+        }
+
         var btnSimpan = $('#btnSimpanBatch');
         btnSimpan.prop('disabled', true).html('<div class="loading-spinner"></div> Menyimpan ' + batchItems.length + ' transaksi...');
+        tampilkanModalProgressSimpan();
         var allSuccess = true;
         var errorMsg = '';
         var totalSaved = 0;
@@ -779,6 +817,11 @@
                 var item = batch.items[j];
                 if (!item.jenis || item.jumlah <= 0 || item.harga <= 0) continue;
                 var dpForItem = (j === 0) ? dpValue : 0;
+                var detailHtml = '<i class="fas fa-fish me-1"></i> <strong>' + item.jenis + '</strong>' +
+                    ' &nbsp;|&nbsp; ' + formatNumber(item.jumlah) + ' kg &times; Rp ' + formatNumber(item.harga) +
+                    ' &nbsp;|&nbsp; Pembeli: ' + (batch.pembeli || '-') +
+                    ' &nbsp;|&nbsp; Transaksi #' + (i + 1) + ' dari ' + batchItems.length;
+                updateModalProgressSimpan(totalSaved, totalItemUntukDisimpan, '<i class="fas fa-sync fa-spin me-1"></i> Menyimpan: ' + detailHtml);
                 try {
                     await postToServer({
                         tanggal: tanggalUTC,
@@ -793,14 +836,17 @@
                         metodePembayaran: batch.metode
                     });
                     totalSaved++;
+                    updateModalProgressSimpan(totalSaved, totalItemUntukDisimpan, '<i class="fas fa-check-circle me-1 text-success"></i> Tersimpan: ' + detailHtml);
                 } catch(err) {
                     allSuccess = false;
                     errorMsg = err.message;
+                    updateModalProgressSimpan(totalSaved, totalItemUntukDisimpan, '<i class="fas fa-exclamation-triangle me-1 text-danger"></i> Gagal menyimpan: ' + detailHtml);
                     break;
                 }
             }
             if (!allSuccess) break;
         }
+        sembunyikanModalProgressSimpan();
         btnSimpan.prop('disabled', false).html('<i class="fas fa-save me-2"></i> Simpan Semua Transaksi');
         if (allSuccess) {
             alert('✓ ' + totalSaved + ' item berhasil disimpan dari ' + batchItems.length + ' transaksi!');
@@ -1448,6 +1494,73 @@
         }
     }
 
+    // ==================== UPDATE HARGA TERPILIH (NILAI BEDA-BEDA PER IKAN) ====================
+    // Dipakai saat kenaikan harga tidak seragam: user mengubah manual kolom
+    // "Harga (Rp/kg)" langsung di tabel untuk tiap ikan (bisa 1, 2, atau berapa pun,
+    // dan nilainya boleh berbeda-beda), lalu centang ikan yang diubah dan klik tombol
+    // "Simpan Perubahan Harga Terpilih" untuk menyimpan semuanya sekaligus.
+    function getPerubahanHargaTerpilih() {
+        var perubahan = [];
+        $('.chk-ikan-bulk:checked').each(function() {
+            var row = $(this).closest('tr');
+            var nama = $(this).data('ikan');
+            var hargaLama = parseFloat(row.find('.harga-edit').data('harga-lama')) || 0;
+            var hargaBaru = parseFloat(row.find('.harga-edit').val());
+            if (!isNaN(hargaBaru) && hargaBaru > 0 && hargaBaru !== hargaLama) {
+                perubahan.push({ nama: nama, hargaLama: hargaLama, hargaBaru: hargaBaru });
+            }
+        });
+        return perubahan;
+    }
+
+    async function simpanPerubahanHargaTerpilih() {
+        var checked = $('.chk-ikan-bulk:checked').length;
+        if (!checked) {
+            alert('Centang minimal 1 ikan yang harganya ingin diubah terlebih dahulu!');
+            return;
+        }
+        var perubahan = getPerubahanHargaTerpilih();
+        if (!perubahan.length) {
+            alert('⚠️ Tidak ada perubahan harga terdeteksi. Ubah dulu angka di kolom "Harga (Rp/kg)" untuk ikan yang dicentang (nilainya harus beda dari harga sebelumnya dan lebih dari 0).');
+            return;
+        }
+
+        var previewLines = perubahan.map(function(it) {
+            return '- ' + it.nama + ': Rp ' + formatNumber(it.hargaLama) + ' → Rp ' + formatNumber(it.hargaBaru);
+        }).join('\n');
+        if (!confirm('Simpan perubahan harga untuk ' + perubahan.length + ' ikan berikut?\n\n' + previewLines)) {
+            return;
+        }
+
+        var btn = $('#btnSimpanPerubahanIndividual');
+        var originalHtml = btn.html();
+        btn.prop('disabled', true);
+        var sukses = 0, gagal = 0, gagalNama = [];
+
+        for (var i = 0; i < perubahan.length; i++) {
+            var it = perubahan[i];
+            btn.html('<div class="loading-spinner"></div> Menyimpan ' + (i+1) + '/' + perubahan.length + '...');
+            try {
+                await postToServer({ action: "updateHargaIkan", nama: it.nama, harga: it.hargaBaru });
+                addPriceHistory(it.nama, it.hargaLama, it.hargaBaru);
+                sukses++;
+            } catch (err) {
+                gagal++;
+                gagalNama.push(it.nama);
+            }
+        }
+
+        btn.prop('disabled', false).html(originalHtml);
+        await loadAllData(isFullHistoryLoaded);
+        refreshMasterDisplay();
+
+        if (gagal === 0) {
+            alert('✓ Berhasil menyimpan perubahan harga ' + sukses + ' ikan!');
+        } else {
+            alert('⚠️ ' + sukses + ' berhasil, ' + gagal + ' gagal (' + gagalNama.join(', ') + ')');
+        }
+    }
+
     // ==================== RIWAYAT HARGA (MODAL SEDERHANA) ====================
     function tampilkanRiwayatHarga() {
         var hist = getPriceHistory();
@@ -1637,6 +1750,7 @@
         $('#resetSearchIkan').on('click', function() { $('#searchIkan').val(''); displayIkanList(''); });
         $('#btnRiwayatHarga').on('click', tampilkanRiwayatHarga);
         $('#btnTerapkanBulkHarga').on('click', terapkanUpdateHargaMassal);
+        $('#btnSimpanPerubahanIndividual').on('click', simpanPerubahanHargaTerpilih);
         $(document).on('change', '#chkSelectAllIkan', function() {
             $('.chk-ikan-bulk').prop('checked', $(this).is(':checked'));
         });
