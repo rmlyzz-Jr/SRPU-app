@@ -4,7 +4,7 @@
  * RPU App - Main JavaScript
  * PT Rafasya Putra Ustanto
  * ============================================================
- */ 
+ */
 
 (function() {
     "use strict";
@@ -813,6 +813,10 @@
             var batch = batchItems[i];
             var dpValue = batch.dp || 0;
             var bongkaranValue = batch.bongkaran || bongkaranGlobal || '-';
+            // Kode unik per transaksi (per kartu batch), supaya semua item ikan di
+            // dalamnya tetap dikenali sebagai 1 kelompok transaksi yang sama walau
+            // disimpan satu-per-satu ke server (dipakai oleh tab Rekap > Rekap Transaksi).
+            var kodeTransaksiBatch = 'TX' + Date.now() + '-' + Math.random().toString(36).slice(2, 8) + '-' + i;
             for (var j = 0; j < batch.items.length; j++) {
                 var item = batch.items[j];
                 if (!item.jenis || item.jumlah <= 0 || item.harga <= 0) continue;
@@ -833,7 +837,8 @@
                         total: item.subtotal,
                         dp: dpForItem,
                         bongkaran: bongkaranValue,
-                        metodePembayaran: batch.metode
+                        metodePembayaran: batch.metode,
+                        kodeTransaksi: kodeTransaksiBatch
                     });
                     totalSaved++;
                     updateModalProgressSimpan(totalSaved, totalItemUntukDisimpan, '<i class="fas fa-check-circle me-1 text-success"></i> Tersimpan: ' + detailHtml);
@@ -1022,6 +1027,18 @@
             }
         }
         filter.select2({ theme: 'default', width: '100%', placeholder: 'Klik lalu ketik', allowClear: true });
+
+        var filterGrup = $('#filterPembeliGrup');
+        if (filterGrup.length) {
+            filterGrup.empty().append('<option value="all">Semua Pembeli</option>');
+            if (masterData.pembeli && masterData.pembeli.length) {
+                for (var i = 0; i < masterData.pembeli.length; i++) {
+                    filterGrup.append('<option value="' + masterData.pembeli[i] + '">' + masterData.pembeli[i] + '</option>');
+                }
+            }
+            if (filterGrup.data('select2')) filterGrup.select2('destroy');
+            filterGrup.select2({ theme: 'default', width: '100%', placeholder: 'Klik lalu ketik', allowClear: true });
+        }
     }
 
     function updateFilterMetodePembayaran() {
@@ -1175,6 +1192,284 @@
         for (var i = 0; i < data.length; i++) grandTotal += (data[i].total || 0);
         html += '<tr class="grand-total-row"><td colspan="7" class="text-end fw-bold">GRAND TOTAL:</td><td class="text-end fw-bold text-success">' + formatRupiah(grandTotal) + '</td></tr></tbody></table></div>';
         container.html(html);
+    }
+
+    // ==================== SIDEBAR TAB REKAP (Cetak vs Rekap Transaksi) ====================
+    function setupRekapSidebar() {
+        $(document).on('click', '#rekapSidebar .list-group-item', function() {
+            var target = $(this).data('subtab');
+            $('#rekapSidebar .list-group-item').removeClass('active');
+            $(this).addClass('active');
+            $('.rekap-subtab').hide();
+            $('#' + target).show();
+            if (target === 'subtabRekapTransaksi' && !lastGroupedTransaksi.length) {
+                filterDataGrup();
+            }
+        });
+    }
+
+    // ==================== REKAP TRANSAKSI (DIKELOMPOKKAN PER BATCH INPUT) ====================
+    var lastGroupedTransaksi = [];
+    var editTransaksiState = null;
+
+    // Mengelompokkan baris-baris rekap (flat) menjadi kelompok per transaksi/batch input,
+    // berdasarkan Kode Transaksi (kolom baru di backend). Baris lama yang belum punya
+    // Kode Transaksi (data sebelum update ini) otomatis dianggap 1 baris = 1 transaksi sendiri,
+    // supaya tidak salah menggabungkan data lama.
+    function groupRekapMenjadiTransaksi(data) {
+        var groups = [];
+        var currentGroup = null;
+        for (var i = 0; i < data.length; i++) {
+            var item = data[i];
+            var kode = item.kodeTransaksi || '';
+            var isSameAsPrev = currentGroup && kode && currentGroup.kodeTransaksi === kode;
+            if (!isSameAsPrev) {
+                currentGroup = {
+                    kodeTransaksi: kode,
+                    tanggal: item.tanggal,
+                    tanggal_utc: item.tanggal_utc || item.tanggal,
+                    hari: item.hari,
+                    pembeli: item.pembeli,
+                    bongkaran: item.bongkaran,
+                    metodePembayaran: item.metodePembayaran,
+                    dp: 0,
+                    total: 0,
+                    items: []
+                };
+                groups.push(currentGroup);
+            }
+            currentGroup.items.push(item);
+            currentGroup.total += (item.total || 0);
+            currentGroup.dp += (item.dp || 0);
+        }
+        return groups;
+    }
+
+    function filterDataGrup() {
+        var filtered = masterData.rekap.slice();
+        var tglMulai = $('#filterTglMulaiGrup').val();
+        var tglSelesai = $('#filterTglSelesaiGrup').val();
+        var pembeli = $('#filterPembeliGrup').val();
+        if (tglMulai) filtered = filtered.filter(function(i) { return i.tanggal >= tglMulai; });
+        if (tglSelesai) filtered = filtered.filter(function(i) { return i.tanggal <= tglSelesai; });
+        if (pembeli && pembeli !== 'all') filtered = filtered.filter(function(i) { return i.pembeli === pembeli; });
+        lastGroupedTransaksi = groupRekapMenjadiTransaksi(filtered);
+        displayRekapTransaksiTable(lastGroupedTransaksi);
+    }
+
+    function displayRekapTransaksiTable(groups) {
+        var container = $('#rekapTransaksiTableContainer');
+        if (!groups.length) { container.html('<div class="alert alert-info">Tidak ada data</div>'); return; }
+        var html = '<div class="rekap-table-container"><table class="rekap-table"><thead><tr>' +
+            '<th>No</th><th>Tanggal</th><th>Pembeli</th><th>Item Ikan</th><th>Jumlah Item</th>' +
+            '<th>Total (Rp)</th><th>DP (Rp)</th><th>Sisa (Rp)</th><th>Metode</th><th>Aksi</th></tr></thead><tbody>';
+        var grandTotal = 0, grandDp = 0;
+        for (var i = 0; i < groups.length; i++) {
+            var g = groups[i];
+            var namaIkan = g.items.map(function(it) { return it.jenisIkan; }).join(', ');
+            var sisa = g.total - g.dp;
+            grandTotal += g.total;
+            grandDp += g.dp;
+            html += '<tr>' +
+                '<td class="text-center">' + (i + 1) + '</td>' +
+                '<td class="text-center">' + formatTanggalIndonesia(g.tanggal) + '</td>' +
+                '<td class="text-center">' + g.pembeli + '</td>' +
+                '<td>' + namaIkan + '</td>' +
+                '<td class="text-center">' + g.items.length + '</td>' +
+                '<td class="text-end fw-bold text-primary">' + formatRupiah(g.total) + '</td>' +
+                '<td class="text-end">' + formatRupiah(g.dp) + '</td>' +
+                '<td class="text-end">' + formatRupiah(sisa) + '</td>' +
+                '<td class="text-center">' + (g.metodePembayaran || '-') + '</td>' +
+                '<td class="text-center"><button type="button" class="btn btn-sm btn-primary btn-edit-transaksi" data-index="' + i + '"><i class="fas fa-edit"></i> Edit</button></td>' +
+                '</tr>';
+        }
+        html += '<tr class="grand-total-row"><td colspan="5" class="text-end fw-bold">GRAND TOTAL:</td>' +
+            '<td class="text-end fw-bold text-success">' + formatRupiah(grandTotal) + '</td>' +
+            '<td class="text-end fw-bold">' + formatRupiah(grandDp) + '</td>' +
+            '<td class="text-end fw-bold">' + formatRupiah(grandTotal - grandDp) + '</td><td></td><td></td></tr>';
+        html += '</tbody></table></div>';
+        container.html(html);
+    }
+
+    // ==================== MODAL EDIT TRANSAKSI ====================
+    function bukaModalEditTransaksi(groupIndex) {
+        var group = lastGroupedTransaksi[groupIndex];
+        if (!group) return;
+
+        editTransaksiState = {
+            kodeTransaksi: group.kodeTransaksi || '',
+            originalRowIndexes: group.items.map(function(it) { return it.rowIndex; }),
+            deletedRowIndexes: [],
+            items: group.items.map(function(it) {
+                return { rowIndex: it.rowIndex, jenis: it.jenisIkan, jumlah: it.jumlah, harga: it.harga, subtotal: it.total };
+            })
+        };
+
+        $('#editTrxTanggal').val(group.tanggal_utc ? convertUTCtoWIB(group.tanggal_utc) : group.tanggal);
+        $('#editTrxDp').val(group.dp || 0);
+        $('#editTrxBongkaran').val(group.bongkaran || '');
+
+        var selectPembeli = $('#editTrxPembeli');
+        selectPembeli.empty();
+        (masterData.pembeli || []).forEach(function(p) {
+            selectPembeli.append('<option value="' + p + '" ' + (p === group.pembeli ? 'selected' : '') + '>' + p + '</option>');
+        });
+        if (selectPembeli.data('select2')) selectPembeli.select2('destroy');
+        setupStartsWithSearch('#editTrxPembeli', false);
+
+        var selectMetode = $('#editTrxMetode');
+        selectMetode.empty();
+        (masterData.metodePembayaran || []).forEach(function(m) {
+            selectMetode.append('<option value="' + m + '" ' + (m === group.metodePembayaran ? 'selected' : '') + '>' + m + '</option>');
+        });
+
+        renderEditTrxItemsTable();
+
+        var modalEl = document.getElementById('modalEditTransaksi');
+        bootstrap.Modal.getOrCreateInstance(modalEl).show();
+    }
+
+    function renderEditTrxItemsTable() {
+        var tbody = $('#editTrxItemsBody');
+        var html = '';
+        editTransaksiState.items.forEach(function(row, i) {
+            html += '<tr data-row="' + i + '">';
+            html += '<td><select class="form-select form-select-sm select-ikan-edit-trx" data-row="' + i + '" style="width:100%;">';
+            html += '<option value="">Pilih</option>';
+            (masterData.ikan || []).forEach(function(ikan) {
+                var namaIkan = typeof ikan === 'object' ? (ikan.nama || ikan) : ikan;
+                var hargaDefault = typeof ikan === 'object' ? (ikan.hargaDefault || ikan.harga || 0) : 0;
+                var selected = (namaIkan === row.jenis) ? 'selected' : '';
+                html += '<option value="' + namaIkan + '" data-harga="' + hargaDefault + '" ' + selected + '>' + namaIkan + (hargaDefault > 0 ? ' (Rp ' + formatNumber(hargaDefault) + ')' : '') + '</option>';
+            });
+            html += '</select></td>';
+            html += '<td><input type="number" step="0.001" class="form-control form-control-sm text-end input-jumlah-edit-trx" data-row="' + i + '" value="' + (row.jumlah || '') + '" placeholder="0" inputmode="decimal"></td>';
+            html += '<td><input type="number" class="form-control form-control-sm text-end input-harga-edit-trx" data-row="' + i + '" value="' + (row.harga || '') + '" placeholder="0" inputmode="numeric"></td>';
+            html += '<td><input type="text" class="form-control form-control-sm text-end" readonly style="background:#f0f2f5; font-weight:600; color:#2c7da0; font-size:11px;" value="' + formatRupiah(row.subtotal || 0) + '"></td>';
+            html += '<td class="text-center"><button type="button" class="btn btn-danger btn-sm btn-hapus-item-edit-trx" data-row="' + i + '" style="padding:2px 4px; font-size:9px; min-height:22px; height:22px; width:22px; border-radius:4px;"><i class="fas fa-trash-alt" style="font-size:9px;"></i></button></td>';
+            html += '</tr>';
+        });
+        tbody.html(html);
+        $('.select-ikan-edit-trx').each(function() { setupSelect2Ikan(this); });
+        updateEditTrxTotalDisplay();
+    }
+
+    function updateEditTrxTotalDisplay() {
+        var total = 0;
+        editTransaksiState.items.forEach(function(row) { total += (row.subtotal || 0); });
+        $('#editTrxTotalDisplay').text(formatRupiah(total));
+    }
+
+    function hitungSubtotalEditTrx(rowIdx) {
+        var row = editTransaksiState.items[rowIdx];
+        if (!row) return;
+        row.subtotal = (row.jumlah || 0) * (row.harga || 0);
+        var tr = $('#editTrxItemsBody tr[data-row="' + rowIdx + '"]');
+        tr.find('input[readonly]').val(formatRupiah(row.subtotal));
+        updateEditTrxTotalDisplay();
+    }
+
+    function tambahItemEditTrx() {
+        editTransaksiState.items.push({ rowIndex: null, jenis: '', jumlah: 0, harga: 0, subtotal: 0 });
+        renderEditTrxItemsTable();
+    }
+
+    function hapusItemEditTrx(rowIdx) {
+        var row = editTransaksiState.items[rowIdx];
+        if (!row) return;
+        if (row.rowIndex !== null && row.rowIndex !== undefined) {
+            editTransaksiState.deletedRowIndexes.push(row.rowIndex);
+        }
+        editTransaksiState.items.splice(rowIdx, 1);
+        renderEditTrxItemsTable();
+    }
+
+    async function simpanEditTransaksi() {
+        var pembeli = $('#editTrxPembeli').val();
+        var metode = $('#editTrxMetode').val();
+        var tanggalWIB = $('#editTrxTanggal').val();
+        var bongkaran = $('#editTrxBongkaran').val() || '-';
+        var dp = parseFloat($('#editTrxDp').val()) || 0;
+
+        if (!tanggalWIB) { alert('Tanggal wajib diisi!'); return; }
+        if (!pembeli) { alert('Pembeli wajib dipilih!'); return; }
+        if (!metode) { alert('Metode pembayaran wajib dipilih!'); return; }
+
+        var itemsValid = [];
+        var deletedRowIndexes = editTransaksiState.deletedRowIndexes.slice();
+        editTransaksiState.items.forEach(function(row) {
+            if (row.jenis && row.jumlah > 0 && row.harga > 0) {
+                itemsValid.push({
+                    rowIndex: (row.rowIndex === undefined) ? null : row.rowIndex,
+                    jenisIkan: row.jenis,
+                    jumlah: row.jumlah,
+                    harga: row.harga,
+                    subtotal: row.jumlah * row.harga
+                });
+            } else if (row.rowIndex !== null && row.rowIndex !== undefined) {
+                // Baris lama dikosongkan oleh user -> dianggap dihapus dari transaksi
+                deletedRowIndexes.push(row.rowIndex);
+            }
+        });
+
+        if (!itemsValid.length) {
+            alert('Minimal harus ada 1 item ikan dengan jenis, jumlah, dan harga terisi!');
+            return;
+        }
+
+        var totalBaru = itemsValid.reduce(function(sum, it) { return sum + it.subtotal; }, 0);
+        if (dp > totalBaru) {
+            alert('DP tidak boleh lebih besar dari Total (Rp ' + formatNumber(totalBaru) + ')!');
+            return;
+        }
+
+        var btn = $('#btnSimpanEditTransaksi');
+        var originalHtml = btn.html();
+        btn.prop('disabled', true).html('<div class="loading-spinner"></div> Menyimpan...');
+
+        try {
+            await postToServer({
+                action: 'updateTransaksiBatch',
+                kodeTransaksi: editTransaksiState.kodeTransaksi,
+                tanggal: convertWIBtoUTC(tanggalWIB),
+                hari: getHariFromDate(tanggalWIB),
+                pembeli: pembeli,
+                bongkaran: bongkaran,
+                metodePembayaran: metode,
+                dp: dp,
+                items: itemsValid,
+                deletedRowIndexes: deletedRowIndexes
+            });
+            bootstrap.Modal.getInstance(document.getElementById('modalEditTransaksi')).hide();
+            await loadAllData(isFullHistoryLoaded);
+            filterDataGrup();
+            alert('✓ Transaksi berhasil diupdate!');
+        } catch (err) {
+            alert('⚠️ Gagal menyimpan: ' + err.message);
+        } finally {
+            btn.prop('disabled', false).html(originalHtml);
+        }
+    }
+
+    async function hapusTransaksiIni() {
+        if (!confirm('Yakin ingin menghapus SELURUH transaksi ini (' + editTransaksiState.originalRowIndexes.length + ' item ikan)? Aksi ini tidak bisa dibatalkan.')) return;
+        var btn = $('#btnHapusTransaksiIni');
+        var originalHtml = btn.html();
+        btn.prop('disabled', true).html('<div class="loading-spinner"></div> Menghapus...');
+        try {
+            await postToServer({
+                action: 'deleteTransaksiBatch',
+                rowIndexes: editTransaksiState.originalRowIndexes
+            });
+            bootstrap.Modal.getInstance(document.getElementById('modalEditTransaksi')).hide();
+            await loadAllData(isFullHistoryLoaded);
+            filterDataGrup();
+            alert('✓ Transaksi berhasil dihapus!');
+        } catch (err) {
+            alert('⚠️ Gagal menghapus: ' + err.message);
+        } finally {
+            btn.prop('disabled', false).html(originalHtml);
+        }
     }
 
     // ==================== REKAP BONGKARAN ====================
@@ -1754,6 +2049,45 @@
         $(document).on('change', '#chkSelectAllIkan', function() {
             $('.chk-ikan-bulk').prop('checked', $(this).is(':checked'));
         });
+
+        // ==== TAB REKAP: sidebar Cetak/Rekap & fitur edit transaksi ====
+        setupRekapSidebar();
+        $('#btnFilterDataGrup').on('click', filterDataGrup);
+        $(document).on('click', '.btn-edit-transaksi', function() {
+            bukaModalEditTransaksi(parseInt($(this).data('index'), 10));
+        });
+        $('#btnTambahItemEditTrx').on('click', tambahItemEditTrx);
+        $(document).on('click', '.btn-hapus-item-edit-trx', function() {
+            hapusItemEditTrx(parseInt($(this).data('row'), 10));
+        });
+        $(document).on('change', '.select-ikan-edit-trx', function() {
+            var rowIdx = parseInt($(this).data('row'), 10);
+            var row = editTransaksiState.items[rowIdx];
+            if (!row) return;
+            row.jenis = $(this).val();
+            var hargaDefault = $(this).find('option:selected').data('harga') || 0;
+            if (hargaDefault > 0 && (!row.harga || row.harga === 0)) {
+                row.harga = hargaDefault;
+                $('#editTrxItemsBody tr[data-row="' + rowIdx + '"] .input-harga-edit-trx').val(hargaDefault);
+            }
+            hitungSubtotalEditTrx(rowIdx);
+        });
+        $(document).on('change', '.input-jumlah-edit-trx', function() {
+            var rowIdx = parseInt($(this).data('row'), 10);
+            var row = editTransaksiState.items[rowIdx];
+            if (!row) return;
+            row.jumlah = parseFloat($(this).val()) || 0;
+            hitungSubtotalEditTrx(rowIdx);
+        });
+        $(document).on('change', '.input-harga-edit-trx', function() {
+            var rowIdx = parseInt($(this).data('row'), 10);
+            var row = editTransaksiState.items[rowIdx];
+            if (!row) return;
+            row.harga = parseFloat($(this).val()) || 0;
+            hitungSubtotalEditTrx(rowIdx);
+        });
+        $('#btnSimpanEditTransaksi').on('click', simpanEditTransaksi);
+        $('#btnHapusTransaksiIni').on('click', hapusTransaksiIni);
 
         // Master data buttons
         $(document).on('click', '#btnTambahPembeli', async function() {
