@@ -347,6 +347,7 @@
                                                     </div>
                                                 </div>
                                                 <div class="small text-muted mt-2">💡 Centang ikan pada tabel di bawah, lalu pilih mode: <strong>Harga Tetap</strong> (semua ikan terpilih diset ke nilai yang sama), <strong>Naik/Turun %</strong> (mis. isi 10 untuk naik 10%, -10 untuk turun 10%), atau <strong>Naik/Turun Rp</strong> (mis. isi 2000 atau -2000).</div>
+                                                <div class="small text-muted mt-1">✏️ <strong>Atau, kalau kenaikan harganya beda-beda tiap ikan</strong> (mis. cuma 1-2 ikan yang naik, dan nilainya juga tidak sama): langsung ubah angka di kolom "Harga (Rp/kg)" pada tabel di bawah untuk masing-masing ikan, centang ikan yang diubah, lalu klik tombol <strong>"Simpan Perubahan Harga Terpilih"</strong> di bawah tabel. Untuk cara ini field "Nilai" di atas tidak perlu diisi.</div>
                                             </div>
                                         </div>
                                         <div class="table-responsive" style="max-height:400px; overflow-y:auto;">
@@ -363,6 +364,11 @@
                                                 </thead>
                                                 <tbody id="listIkan"></tbody>
                                             </table>
+                                        </div>
+                                        <div class="text-end mt-2">
+                                            <button class="btn btn-sm btn-success" id="btnSimpanPerubahanIndividual" type="button">
+                                                <i class="fas fa-save me-1"></i> Simpan Perubahan Harga Terpilih
+                                            </button>
                                         </div>
                                     </div>
                                 </div>
@@ -403,6 +409,29 @@
                         </div>
                     </div>
                     <div id="masterStatus" class="alert alert-success mt-3" style="display:none"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL PROGRESS SIMPAN BATCH -->
+<div class="modal fade" id="modalProgressSimpan" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fas fa-cloud-upload-alt me-2"></i> Menyimpan Transaksi...</h5>
+            </div>
+            <div class="modal-body">
+                <div class="d-flex justify-content-between mb-1">
+                    <span class="small fw-bold">Progres</span>
+                    <span class="small fw-bold" id="progressSimpanCounter">0 / 0</span>
+                </div>
+                <div class="progress mb-3" style="height:18px;">
+                    <div class="progress-bar bg-success progress-bar-striped progress-bar-animated" id="progressSimpanBar" role="progressbar" style="width:0%" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">0%</div>
+                </div>
+                <div class="alert alert-info py-2 px-3 mb-0 small" id="progressSimpanDetail">
+                    <i class="fas fa-sync fa-spin me-1"></i> Mempersiapkan data...
                 </div>
             </div>
         </div>
