@@ -678,43 +678,17 @@
         var btnSimpan = $('#btnSimpanBatch');
         btnSimpan.prop('disabled', true).html('<div class="loading-spinner"></div> Menyimpan ' + batchItems.length + ' transaksi...');
 
-        // ---- Susun semua baris ikan (dari semua transaksi) jadi satu daftar payload ----
-        // Format payload PER BARIS sengaja dibuat SAMA seperti sebelumnya (tidak diubah)
-        // supaya tidak perlu mengubah apa pun di Google Apps Script (backend).
-        var payloads = [];
-        for (var i = 0; i < batchItems.length; i++) {
-            var batch = batchItems[i];
-            var dpValue = batch.dp || 0;
-            var bongkaranValue = batch.bongkaran || bongkaranGlobal || '-';
-            for (var j = 0; j < batch.items.length; j++) {
-                var item = batch.items[j];
-                if (!item.jenis || item.jumlah <= 0 || item.harga <= 0) continue;
-                var dpForItem = (j === 0) ? dpValue : 0;
-                payloads.push({
-                    tanggal: tanggalUTC,
-                    hari: hari,
-                    pembeli: batch.pembeli,
-                    jenisIkan: item.jenis,
-                    jumlah: item.jumlah,
-                    harga: item.harga,
-                    total: item.subtotal,
-                    dp: dpForItem,
-                    bongkaran: bongkaranValue,
-                    metodePembayaran: batch.metode
-                });
-            }
-        }
-
-        // ---- Kirim secara PARALEL per kelompok (chunk), bukan satu-satu berurutan ----
-        // Ini yang membuat proses simpan jauh lebih cepat: dulu N baris = N kali menunggu
-        // bergantian (bisa puluhan detik), sekarang N baris dikirim CONCURRENCY sekaligus.
-        // CONCURRENCY dijaga tidak terlalu besar supaya tidak membebani Google Apps Script.
-        var CONCURRENCY = 6;
+        // ---- Kirim SATU PER SATU secara BERURUTAN: transaksi (batch) #1 harus selesai
+        // dulu sebelum lanjut ke transaksi #2, #3, #4, dan seterusnya. Setiap transaksi
+        // dikirim sebagai SATU request dengan action "saveBatch" berisi SEMUA item ikan
+        // milik pembeli itu, supaya seluruh itemnya tetap dikelompokkan dengan 1 Kode
+        // Transaksi yang sama di backend (lihat handleBatchSave di Code.gs). ----
         var allSuccess = true;
         var errorMsg = '';
         var totalSaved = 0;
+        var totalTransaksiBerhasil = 0;
 
-        function kirimSatuItem(payload) {
+        function kirimSatuTransaksi(payload) {
             return fetch(SCRIPT_URL, {
                 method: "POST",
                 mode: "no-cors",
@@ -723,22 +697,52 @@
             });
         }
 
-        for (var start = 0; start < payloads.length && allSuccess; start += CONCURRENCY) {
-            var chunk = payloads.slice(start, start + CONCURRENCY);
-            btnSimpan.html('<div class="loading-spinner"></div> Menyimpan item ' + (start + 1) + '-' + Math.min(start + chunk.length, payloads.length) + ' dari ' + payloads.length + '...');
-            var results = await Promise.allSettled(chunk.map(kirimSatuItem));
-            for (var r = 0; r < results.length; r++) {
-                if (results[r].status === 'fulfilled') {
-                    totalSaved++;
-                } else {
-                    allSuccess = false;
-                    errorMsg = (results[r].reason && results[r].reason.message) || 'Gagal mengirim data (jaringan terputus)';
-                }
+        for (var i = 0; i < batchItems.length && allSuccess; i++) {
+            var batch = batchItems[i];
+            var dpValue = batch.dp || 0;
+            var bongkaranValue = batch.bongkaran || bongkaranGlobal || '-';
+
+            var itemsForThisBatch = [];
+            for (var j = 0; j < batch.items.length; j++) {
+                var item = batch.items[j];
+                if (!item.jenis || item.jumlah <= 0 || item.harga <= 0) continue;
+                itemsForThisBatch.push({
+                    jenisIkan: item.jenis,
+                    jumlah: item.jumlah,
+                    harga: item.harga,
+                    subtotal: item.subtotal
+                });
+            }
+            if (itemsForThisBatch.length === 0) continue;
+
+            btnSimpan.html('<div class="loading-spinner"></div> Menyimpan transaksi ' + (i + 1) + ' dari ' + batchItems.length + ' (' + batch.pembeli + ')...');
+
+            var payloadBatch = {
+                action: "saveBatch",
+                tanggal: tanggalUTC,
+                hari: hari,
+                pembeli: batch.pembeli,
+                bongkaran: bongkaranValue,
+                metodePembayaran: batch.metode,
+                dp: dpValue,
+                totalBelanja: batch.total,
+                items: itemsForThisBatch
+            };
+
+            try {
+                // await di sini memastikan transaksi ini SELESAI dikirim dulu
+                // sebelum loop lanjut ke transaksi berikutnya (i+1).
+                await kirimSatuTransaksi(payloadBatch);
+                totalSaved += itemsForThisBatch.length;
+                totalTransaksiBerhasil++;
+            } catch (err) {
+                allSuccess = false;
+                errorMsg = (err && err.message) || 'Gagal mengirim data (jaringan terputus)';
             }
         }
         btnSimpan.prop('disabled', false).html('<i class="fas fa-save me-2"></i> Simpan Semua Transaksi');
         if (allSuccess) {
-            alert('✓ ' + totalSaved + ' item berhasil disimpan dari ' + batchItems.length + ' transaksi!');
+            alert('✓ ' + totalSaved + ' item berhasil disimpan dari ' + totalTransaksiBerhasil + ' transaksi!');
             await loadAllData();
             clearBatch();
             for (var i = 0; i < DEFAULT_BATCH_COUNT; i++) {
