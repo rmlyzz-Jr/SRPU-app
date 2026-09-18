@@ -1,4 +1,3 @@
-/* script.js - VERSION FINAL - TANPA RP DOBEL */
 /**
  * ============================================================
  * RPU App - Main JavaScript
@@ -12,183 +11,23 @@
     // ==================== KONFIGURASI ====================
     var SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwBhvO1gmUN2TxZEK-cyAdRNOFWtStfBU6rA6D6eJcITYgT74uENkfN1H-LHPV14M6M/exec";
     var masterData = { pembeli: [], ikan: [], bongkaran: [], rekap: [], metodePembayaran: [] };
-    var masterDataFull = null; // cache seluruh histori transaksi (dipakai saat "Muat Semua Data")
-    var isFullHistoryLoaded = false;
     var batchItems = [];
     var batchCounter = 0;
     var dbConnected = false;
     var DEFAULT_BATCH_COUNT = 5;
     var DEFAULT_ROWS_PER_BATCH = 4;
     var DEFAULT_PEMBELI = ['Pembeli 1', 'Pembeli 2', 'Pembeli 3', 'Pembeli 4', 'Pembeli 5'];
-    var DEFAULT_LOAD_DAYS = 30; // hanya load N hari terakhir saat pertama buka aplikasi
-    var LS_PRICE_HISTORY_KEY = 'rpu_riwayatHargaIkan';
-    var LS_LAST_UPDATE_KEY = 'rpu_lastUpdateIkan';
 
-    // ==================== HELPER: RIWAYAT HARGA (LOCAL) ====================
-    // Catatan: histori ini tersimpan di browser (localStorage) masing-masing perangkat,
-    // bukan di server. Untuk audit terpusat di semua perangkat, tambahkan penyimpanan
-    // riwayat harga di sisi Apps Script (mis. sheet "RiwayatHarga").
-    function getPriceHistory() {
-        try {
-            return JSON.parse(localStorage.getItem(LS_PRICE_HISTORY_KEY) || '[]');
-        } catch (e) { return []; }
-    }
-    function addPriceHistory(nama, hargaLama, hargaBaru) {
-        try {
-            var hist = getPriceHistory();
-            hist.unshift({
-                nama: nama,
-                hargaLama: hargaLama,
-                hargaBaru: hargaBaru,
-                waktu: new Date().toISOString()
-            });
-            if (hist.length > 500) hist = hist.slice(0, 500);
-            localStorage.setItem(LS_PRICE_HISTORY_KEY, JSON.stringify(hist));
-
-            var lastUpdate = {};
-            try { lastUpdate = JSON.parse(localStorage.getItem(LS_LAST_UPDATE_KEY) || '{}'); } catch(e2) {}
-            lastUpdate[nama] = new Date().toISOString();
-            localStorage.setItem(LS_LAST_UPDATE_KEY, JSON.stringify(lastUpdate));
-        } catch (e) { /* localStorage tidak tersedia, abaikan */ }
-    }
-    function getLastUpdateMap() {
-        try { return JSON.parse(localStorage.getItem(LS_LAST_UPDATE_KEY) || '{}'); } catch(e) { return {}; }
-    }
-    function formatWaktuSingkat(isoString) {
-        if (!isoString) return '-';
-        var d = new Date(isoString);
-        if (isNaN(d.getTime())) return '-';
-        var dd = String(d.getDate()).padStart(2,'0');
-        var mm = String(d.getMonth()+1).padStart(2,'0');
-        var yy = d.getFullYear();
-        var hh = String(d.getHours()).padStart(2,'0');
-        var mi = String(d.getMinutes()).padStart(2,'0');
-        return dd + '/' + mm + '/' + yy + ' ' + hh + ':' + mi;
-    }
-
-    // ==================== HELPER: KOMUNIKASI KE BACKEND (FIX no-cors) ====================
-    // PENTING: sebelumnya semua request memakai mode:"no-cors" sehingga response TIDAK PERNAH
-    // bisa dibaca oleh browser -> aplikasi selalu menganggap request berhasil walau backend gagal.
-    // Perbaikan: gunakan fetch biasa (bukan no-cors) dan kirim body sebagai text/plain agar
-    // Google Apps Script tidak memicu CORS preflight (OPTIONS) yang tidak didukung Apps Script.
-    // Apps Script tetap bisa membaca body dengan JSON.parse(e.postData.contents) seperti biasa.
-    async function postToServer(payload) {
-        var response;
-        try {
-            response = await fetch(SCRIPT_URL, {
-                method: "POST",
-                headers: { "Content-Type": "text/plain;charset=utf-8" },
-                body: JSON.stringify(payload)
-            });
-        } catch (networkErr) {
-            throw new Error('Tidak bisa terhubung ke server. Periksa koneksi internet Anda. (' + networkErr.message + ')');
-        }
-        if (!response.ok) {
-            throw new Error('Server merespon dengan error (HTTP ' + response.status + ')');
-        }
-        var text = await response.text();
-        var result;
-        try {
-            result = JSON.parse(text);
-        } catch (parseErr) {
-            // Backend tidak mengembalikan JSON yang valid
-            throw new Error('Respon server tidak dikenali. Pastikan Apps Script mengembalikan JSON.');
-        }
-        if (result && (result.status === 'error' || result.status === 'gagal')) {
-            throw new Error(result.message || 'Server menolak permintaan.');
-        }
-        return result;
-    }
-
-    // ==================== FORMAT RUPIAH - FIXED (TANPA DUPLIKASI) ====================
-    
-    // ✅ Format angka dengan titik ribuan (TANPA "Rp")
-    function formatNumber(angka) {
-        if (angka === undefined || angka === null || isNaN(angka)) {
-            angka = 0;
-        }
-        return new Intl.NumberFormat('id-ID', {
-            minimumFractionDigits: 0,
-            maximumFractionDigits: 0
+    // ==================== UTILITY FUNCTIONS ====================
+    function formatRupiah(angka) {
+        if (isNaN(angka)) angka = 0;
+        return 'Rp ' + new Intl.NumberFormat('id-ID', { 
+            style: 'currency', 
+            currency: 'IDR', 
+            minimumFractionDigits: 0 
         }).format(angka);
     }
 
-    // ✅ Format Rupiah dengan 1x "Rp" (HANYA 1 KALI)
-    function formatRupiah(angka) {
-        if (angka === undefined || angka === null || isNaN(angka)) {
-            angka = 0;
-        }
-        return 'Rp ' + formatNumber(angka);
-    }
-
-    // ==================== PASTI JALAN - SCROLL & FOCUS ====================
-    function pastiScrollKeAtas() {
-        window.scrollTo(0, 0);
-        document.documentElement.scrollTop = 0;
-        document.body.scrollTop = 0;
-        $('html, body').scrollTop(0);
-    }
-
-    function pastiFocusKeElement(selector) {
-        var el = $(selector);
-        if (!el.length) return;
-        setTimeout(function() {
-            var offset = el.offset();
-            if (offset) {
-                window.scrollTo(0, offset.top - 80);
-            }
-            el.focus();
-            if (el.is('input')) {
-                el.select();
-            }
-        }, 300);
-    }
-
-    function pastiFocusKePembeli(batchId) {
-        var selector = '#pembeli-select-' + batchId;
-        var el = $(selector);
-        if (!el.length) return;
-        setTimeout(function() {
-            var offset = el.offset();
-            if (offset) {
-                window.scrollTo(0, offset.top - 80);
-            }
-            el.select2('open');
-            setTimeout(function() {
-                var searchField = document.querySelector('.select2-container--open .select2-search__field');
-                if (searchField) {
-                    searchField.focus();
-                    searchField.select();
-                }
-            }, 300);
-        }, 400);
-    }
-
-    // ==================== ALERT SEBELUM CLOSE ====================
-    function confirmBeforeClose(event) {
-        var hasUnsavedData = false;
-        if (batchItems.length > 0) {
-            for (var i = 0; i < batchItems.length; i++) {
-                var batch = batchItems[i];
-                for (var j = 0; j < batch.items.length; j++) {
-                    var item = batch.items[j];
-                    if (item.jenis && item.jenis.trim() !== '' && item.jumlah > 0 && item.harga > 0) {
-                        hasUnsavedData = true;
-                        break;
-                    }
-                }
-                if (hasUnsavedData) break;
-            }
-        }
-        if (hasUnsavedData) {
-            event.preventDefault();
-            event.returnValue = '⚠️ Ada transaksi yang belum disimpan! Yakin ingin meninggalkan halaman?';
-            return event.returnValue;
-        }
-    }
-    window.addEventListener('beforeunload', confirmBeforeClose);
-
-    // ==================== UTILITY FUNCTIONS ====================
     function getHariFromDate(dateString) {
         if (!dateString) return '-';
         var days = ['Minggu','Senin','Selasa','Rabu','Kamis','Jumat','Sabtu'];
@@ -241,19 +80,6 @@
         return dateString ? convertUTCtoWIB(dateString) : '';
     }
 
-    // ==================== HELPER: Hitung item terisi ====================
-    function getTotalItemsTerisi(batch) {
-        var count = 0;
-        if (!batch || !batch.items) return 0;
-        for (var i = 0; i < batch.items.length; i++) {
-            var item = batch.items[i];
-            if (item.jenis && item.jenis.trim() !== '' && item.jumlah > 0 && item.harga > 0) {
-                count++;
-            }
-        }
-        return count;
-    }
-
     // ==================== SELECT2 SETUP ====================
     function setupStartsWithSearch(selector, autoOpen) {
         $(selector).select2({
@@ -261,7 +87,6 @@
             width: '100%',
             placeholder: 'Klik lalu ketik',
             allowClear: true,
-            dropdownAutoWidth: true,
             matcher: function(params, data) {
                 var term = $.trim(params.term);
                 if (term === '') return data;
@@ -301,7 +126,6 @@
             width: '100%',
             placeholder: 'Klik lalu ketik',
             allowClear: true,
-            dropdownAutoWidth: true,
             matcher: function(params, data) {
                 var term = $.trim(params.term);
                 if (term === '') return data;
@@ -347,21 +171,18 @@
 
     function updateBatchSummary() {
         var totalTransaksi = batchItems.length;
-        var totalItemsTerisi = 0;
+        var totalItems = 0;
         var totalNominal = 0;
-        
         for (var i = 0; i < batchItems.length; i++) {
-            var batch = batchItems[i];
-            totalItemsTerisi += getTotalItemsTerisi(batch);
-            totalNominal += batch.total || 0;
+            totalItems += batchItems[i].items.length;
+            totalNominal += batchItems[i].total || 0;
         }
-        
         $('#batchCount').text(totalTransaksi);
         $('#summaryTransaksi').text(totalTransaksi);
-        $('#summaryItem').text(totalItemsTerisi);
+        $('#summaryItem').text(totalItems);
         $('#summaryTotal').text(formatRupiah(totalNominal));
         $('#totalBatch').text(formatRupiah(totalNominal));
-        $('#batchItemCount').text(totalTransaksi + ' transaksi, ' + totalItemsTerisi + ' item terisi');
+        $('#batchItemCount').text(totalTransaksi + ' transaksi, ' + totalItems + ' item ikan');
     }
 
     function clearBatch() {
@@ -388,23 +209,15 @@
     }
 
     function renderBatchItemHTML(item) {
-        var totalItemsTerisi = getTotalItemsTerisi(item);
-        var totalBaris = item.items.length;
-        var statusText = totalItemsTerisi + '/' + totalBaris + ' terisi';
-        var statusClass = totalItemsTerisi > 0 ? 'bg-success' : 'bg-secondary';
-        var batchIndex = batchItems.indexOf(item) + 1;
-        
-        var html = '<div class="batch-item scroll-target" id="' + item.id + '">';
-        html += '<div class="batch-header">';
-        html += '<span class="batch-number">#' + batchIndex + '</span>';
-        html += '<span class="badge ' + statusClass + ' ms-2" style="font-size:10px; padding:4px 10px;">' + statusText + '</span>';
+        var html = '<div class="batch-item" id="' + item.id + '">';
+        html += '<span class="batch-number">#' + (batchItems.indexOf(item) + 1) + '</span>';
         html += '<button type="button" class="btn btn-sm btn-danger btn-remove-batch" onclick="window.removeBatch(\'' + item.id + '\')"><i class="fas fa-times"></i></button>';
-        html += '</div>';
         
-        html += '<div class="row g-1 mb-2">';
-        html += '<div class="col-12 col-md-5">';
+        // ROW PERTAMA: Pembeli, DP, Metode
+        html += '<div class="row mb-3">';
+        html += '<div class="col-md-5">';
         html += '<label class="form-label"><i class="fas fa-user"></i> Pembeli</label>';
-        html += '<select class="form-select form-select-sm select-pembeli-batch" data-batch="' + item.id + '" style="width:100%;" id="pembeli-select-' + item.id + '">';
+        html += '<select class="form-select select-pembeli-batch" data-batch="' + item.id + '" style="width:100%;" id="pembeli-select-' + item.id + '">';
         html += '<option value="">Pilih pembeli</option>';
         if (masterData.pembeli && masterData.pembeli.length) {
             for (var i = 0; i < masterData.pembeli.length; i++) {
@@ -413,13 +226,13 @@
             }
         }
         html += '</select></div>';
-        html += '<div class="col-6 col-md-3">';
+        html += '<div class="col-md-3">';
         html += '<label class="form-label"><i class="fas fa-money-bill-alt"></i> DP</label>';
-        html += '<input type="number" class="form-control form-control-sm input-dp-batch" data-batch="' + item.id + '" value="' + (item.dp || 0) + '" step="1000" placeholder="0">';
+        html += '<input type="number" class="form-control input-dp-batch" data-batch="' + item.id + '" value="' + (item.dp || 0) + '" step="1000" placeholder="0">';
         html += '</div>';
-        html += '<div class="col-6 col-md-4">';
+        html += '<div class="col-md-4">';
         html += '<label class="form-label"><i class="fas fa-money-bill-wave"></i> Metode</label>';
-        html += '<select class="form-select form-select-sm select-metode-batch" data-batch="' + item.id + '">';
+        html += '<select class="form-select select-metode-batch" data-batch="' + item.id + '">';
         if (masterData.metodePembayaran && masterData.metodePembayaran.length) {
             for (var i = 0; i < masterData.metodePembayaran.length; i++) {
                 var selected = (masterData.metodePembayaran[i] === item.metode) ? 'selected' : '';
@@ -428,49 +241,43 @@
         }
         html += '</select></div></div>';
         
-        html += '<div class="row g-1 mb-2">';
-        html += '<div class="col-12">';
+        // ROW KEDUA: Bongkaran
+        html += '<div class="row mb-2">';
+        html += '<div class="col-md-12">';
         html += '<label class="form-label"><i class="fas fa-boxes"></i> Bongkaran</label>';
-        html += '<input type="text" class="form-control form-control-sm input-bongkaran-batch" data-batch="' + item.id + '" value="' + (item.bongkaran || $('#bongkaranBatchGlobal').val() || '') + '" placeholder="Nama bongkaran..." list="bongkaranListBatch">';
+        html += '<input type="text" class="form-control input-bongkaran-batch" data-batch="' + item.id + '" value="' + (item.bongkaran || $('#bongkaranBatchGlobal').val() || '') + '" placeholder="Nama bongkaran..." list="bongkaranListBatch">';
         html += '<div class="auto-fill-hint">💡 Isi otomatis dari master bongkaran</div>';
         html += '</div></div>';
         
+        // TABLE ITEMS
         html += '<div class="table-container"><div class="table-responsive">';
-        html += '<table class="table-ikan table-sm">';
-        html += '<thead><tr>';
-        html += '<th style="min-width:120px;">Jenis Ikan</th>';
-        html += '<th style="min-width:90px;">Jumlah (kg)</th>';
-        html += '<th style="min-width:100px;">Harga (Rp/kg)</th>';
-        html += '<th style="min-width:110px;">Subtotal</th>';
-        html += '<th style="width:40px;">Aksi</th>';
-        html += '</tr></thead>';
+        html += '<table class="table-ikan" style="width:100%; table-layout:fixed;">';
+        html += '<thead><tr><th style="width:35%">Jenis Ikan</th><th style="width:15%">Jumlah (kg)</th><th style="width:20%">Harga (Rp/kg)</th><th style="width:20%">Subtotal</th><th style="width:10%">Aksi</th></tr></thead>';
         html += '<tbody id="itemsBody-' + item.id + '">';
         for (var i = 0; i < item.items.length; i++) {
             var row = item.items[i];
-            var isTerisi = (row.jenis && row.jenis.trim() !== '' && row.jumlah > 0 && row.harga > 0);
-            var rowClass = isTerisi ? 'row-terisi' : 'row-kosong';
-            html += '<tr id="' + item.id + '-item-' + i + '" class="' + rowClass + '">';
-            html += '<td><select class="form-select form-select-sm select-ikan-batch" data-batch="' + item.id + '" data-row="' + i + '" style="width:100%;">';
-            html += '<option value="">Pilih</option>';
+            html += '<tr id="' + item.id + '-item-' + i + '">';
+            html += '<td><select class="form-select select-ikan-batch" data-batch="' + item.id + '" data-row="' + i + '" style="width:100%;">';
+            html += '<option value="">Pilih jenis ikan</option>';
             if (masterData.ikan && masterData.ikan.length) {
                 for (var j = 0; j < masterData.ikan.length; j++) {
                     var ikan = masterData.ikan[j];
                     var namaIkan = typeof ikan === 'object' ? (ikan.nama || ikan) : ikan;
                     var hargaDefault = typeof ikan === 'object' ? (ikan.hargaDefault || ikan.harga || 0) : 0;
                     var selected = (namaIkan === row.jenis) ? 'selected' : '';
-                    html += '<option value="' + namaIkan + '" data-harga="' + hargaDefault + '" ' + selected + '>' + namaIkan + (hargaDefault > 0 ? ' (Rp ' + formatNumber(hargaDefault) + ')' : '') + '</option>';
+                    html += '<option value="' + namaIkan + '" data-harga="' + hargaDefault + '" ' + selected + '>' + namaIkan + (hargaDefault > 0 ? ' (Rp ' + hargaDefault.toLocaleString() + ')' : '') + '</option>';
                 }
             }
             html += '</select></td>';
-            html += '<td><input type="number" step="0.001" class="form-control form-control-sm text-end input-jumlah-batch" data-batch="' + item.id + '" data-row="' + i + '" value="' + (row.jumlah || '') + '" placeholder="0" inputmode="decimal"></td>';
-            html += '<td><input type="number" class="form-control form-control-sm text-end input-harga-batch" data-batch="' + item.id + '" data-row="' + i + '" value="' + (row.harga || '') + '" placeholder="0" inputmode="numeric"></td>';
-            html += '<td><input type="text" class="form-control form-control-sm text-end input-subtotal-batch" data-batch="' + item.id + '" data-row="' + i + '" readonly style="background:#f0f2f5; font-weight:600; color:#2c7da0; font-size:11px;" value="' + formatRupiah(row.subtotal || 0) + '"></td>';
-            html += '<td class="text-center"><button type="button" class="btn btn-danger btn-sm btn-remove-item-batch" data-batch="' + item.id + '" data-row="' + i + '" style="padding:2px 4px; font-size:9px; min-height:22px; height:22px; width:22px; border-radius:4px;"><i class="fas fa-trash-alt" style="font-size:9px;"></i></button></td>';
+            html += '<td><input type="number" step="0.001" class="form-control text-end input-jumlah-batch" data-batch="' + item.id + '" data-row="' + i + '" value="' + (row.jumlah || '') + '" placeholder="0" oninput="window.calculateItemSubtotal(\'' + item.id + '\', ' + i + ')"></td>';
+            html += '<td><input type="number" class="form-control text-end input-harga-batch" data-batch="' + item.id + '" data-row="' + i + '" value="' + (row.harga || '') + '" placeholder="0" oninput="window.calculateItemSubtotal(\'' + item.id + '\', ' + i + ')"></td>';
+            html += '<td><input type="text" class="form-control text-end input-subtotal-batch" data-batch="' + item.id + '" data-row="' + i + '" readonly style="background:#e9ecef; font-weight:600; color:#2c7da0;" value="' + formatRupiah(row.subtotal || 0) + '"></td>';
+            html += '<td class="text-center"><button type="button" class="btn btn-danger btn-sm btn-remove-item-batch" data-batch="' + item.id + '" data-row="' + i + '"><i class="fas fa-trash-alt"></i></button></td>';
             html += '</tr>';
         }
         html += '</tbody></table></div></div>';
-        html += '<button type="button" class="btn-add-row" onclick="window.addItemToBatch(\'' + item.id + '\')"><i class="fas fa-plus me-1"></i> Tambah Ikan</button>';
-        html += '<div class="text-end mt-1"><small><strong>Subtotal: <span id="subtotal-' + item.id + '" style="color:#2c7da0;font-size:15px;">' + formatRupiah(item.total) + '</span></strong></small></div>';
+        html += '<button type="button" class="btn-add-row" onclick="window.addItemToBatch(\'' + item.id + '\')"><i class="fas fa-plus me-2"></i> Tambah Ikan</button>';
+        html += '<div class="text-end mt-2"><strong>Subtotal Transaksi: <span id="subtotal-' + item.id + '" style="color:#2c7da0;font-size:18px;">' + formatRupiah(item.total) + '</span></strong></div>';
         html += '</div>';
         return html;
     }
@@ -499,9 +306,7 @@
         reattachGlobalEvents();
     }
 
-    function addBatchItem(pembeli, bongkaran, dp, metode, autoFocus) {
-        autoFocus = autoFocus !== undefined ? autoFocus : true;
-        
+    function addBatchItem(pembeli, bongkaran, dp, metode) {
         batchCounter++;
         var batchId = 'batch-' + batchCounter;
         var item = {
@@ -517,11 +322,6 @@
         batchItems.push(item);
         renderBatchItem(item);
         updateBatchSummary();
-        
-        if (autoFocus) {
-            pastiFocusKePembeli(batchId);
-        }
-        
         return item;
     }
 
@@ -561,36 +361,6 @@
         
         updateBatchTotal(batchId);
         updateBatchSummary();
-        
-        updateBatchStatusBadge(batchId);
-    }
-
-    function updateBatchStatusBadge(batchId) {
-        var batch = getBatch(batchId);
-        if (!batch) return;
-        var batchElement = $('#' + batchId);
-        if (!batchElement.length) return;
-        
-        var totalItemsTerisi = getTotalItemsTerisi(batch);
-        var totalBaris = batch.items.length;
-        var statusText = totalItemsTerisi + '/' + totalBaris + ' terisi';
-        var statusClass = totalItemsTerisi > 0 ? 'bg-success' : 'bg-secondary';
-        
-        var badge = batchElement.find('.badge');
-        if (badge.length) {
-            badge.text(statusText);
-            badge.removeClass('bg-success bg-secondary').addClass(statusClass);
-        }
-        
-        batchElement.find('tbody tr').each(function(index) {
-            var row = $(this);
-            var item = batch.items[index];
-            if (item && item.jenis && item.jenis.trim() !== '' && item.jumlah > 0 && item.harga > 0) {
-                row.removeClass('row-kosong').addClass('row-terisi');
-            } else {
-                row.removeClass('row-terisi').addClass('row-kosong');
-            }
-        });
     }
 
     function addItemToBatch(batchId) {
@@ -614,8 +384,8 @@
                         searchField.focus();
                         searchField.select();
                     }
-                }, 150);
-            }, 300);
+                }, 100);
+            }, 200);
         }
     }
 
@@ -638,7 +408,7 @@
         if (focusInput.length) {
             setTimeout(function() {
                 focusInput.focus();
-            }, 200);
+            }, 150);
         }
     }
 
@@ -682,7 +452,6 @@
                     hargaInput.val(hargaDefault);
                 }
                 calculateItemSubtotal(bId, row);
-                updateBatchStatusBadge(bId);
             }
         });
 
@@ -728,7 +497,6 @@
             if (this.value === '0' || this.value === '') {
                 this.value = '';
             }
-            this.select();
         }).on('blur', function() {
             if (this.value === '' || this.value === '0') {
                 this.value = '0';
@@ -739,33 +507,6 @@
                 }
             }
         });
-    }
-
-    // ==================== MODAL PROGRESS SIMPAN BATCH ====================
-    function tampilkanModalProgressSimpan() {
-        $('#progressSimpanCounter').text('0 / 0');
-        $('#progressSimpanBar').css('width', '0%').attr('aria-valuenow', 0).text('0%');
-        $('#progressSimpanDetail').html('<i class="fas fa-sync fa-spin me-1"></i> Mempersiapkan data...');
-        var modalEl = document.getElementById('modalProgressSimpan');
-        if (modalEl) {
-            var modal = bootstrap.Modal.getOrCreateInstance(modalEl);
-            modal.show();
-        }
-    }
-
-    function updateModalProgressSimpan(current, total, detailHtml) {
-        var persen = total > 0 ? Math.round((current / total) * 100) : 0;
-        $('#progressSimpanCounter').text(current + ' / ' + total);
-        $('#progressSimpanBar').css('width', persen + '%').attr('aria-valuenow', persen).text(persen + '%');
-        $('#progressSimpanDetail').html(detailHtml);
-    }
-
-    function sembunyikanModalProgressSimpan() {
-        var modalEl = document.getElementById('modalProgressSimpan');
-        if (modalEl) {
-            var modal = bootstrap.Modal.getInstance(modalEl);
-            if (modal) modal.hide();
-        }
     }
 
     // ==================== SAVE BATCH ====================
@@ -793,19 +534,8 @@
             if (batch.dp > batch.total) { alert('Transaksi #' + (i+1) + ': DP tidak boleh lebih besar dari total belanja!'); valid = false; break; }
         }
         if (!valid) return;
-
-        // Hitung dulu total item yang benar-benar akan disimpan, untuk progress bar
-        var totalItemUntukDisimpan = 0;
-        for (var i = 0; i < batchItems.length; i++) {
-            for (var j = 0; j < batchItems[i].items.length; j++) {
-                var it = batchItems[i].items[j];
-                if (it.jenis && it.jumlah > 0 && it.harga > 0) totalItemUntukDisimpan++;
-            }
-        }
-
         var btnSimpan = $('#btnSimpanBatch');
         btnSimpan.prop('disabled', true).html('<div class="loading-spinner"></div> Menyimpan ' + batchItems.length + ' transaksi...');
-        tampilkanModalProgressSimpan();
         var allSuccess = true;
         var errorMsg = '';
         var totalSaved = 0;
@@ -813,45 +543,37 @@
             var batch = batchItems[i];
             var dpValue = batch.dp || 0;
             var bongkaranValue = batch.bongkaran || bongkaranGlobal || '-';
-            // Kode unik per transaksi (per kartu batch), supaya semua item ikan di
-            // dalamnya tetap dikenali sebagai 1 kelompok transaksi yang sama walau
-            // disimpan satu-per-satu ke server (dipakai oleh tab Rekap > Rekap Transaksi).
-            var kodeTransaksiBatch = 'TX' + Date.now() + '-' + Math.random().toString(36).slice(2, 8) + '-' + i;
             for (var j = 0; j < batch.items.length; j++) {
                 var item = batch.items[j];
                 if (!item.jenis || item.jumlah <= 0 || item.harga <= 0) continue;
                 var dpForItem = (j === 0) ? dpValue : 0;
-                var detailHtml = '<i class="fas fa-fish me-1"></i> <strong>' + item.jenis + '</strong>' +
-                    ' &nbsp;|&nbsp; ' + formatNumber(item.jumlah) + ' kg &times; Rp ' + formatNumber(item.harga) +
-                    ' &nbsp;|&nbsp; Pembeli: ' + (batch.pembeli || '-') +
-                    ' &nbsp;|&nbsp; Transaksi #' + (i + 1) + ' dari ' + batchItems.length;
-                updateModalProgressSimpan(totalSaved, totalItemUntukDisimpan, '<i class="fas fa-sync fa-spin me-1"></i> Menyimpan: ' + detailHtml);
                 try {
-                    await postToServer({
-                        tanggal: tanggalUTC,
-                        hari: hari,
-                        pembeli: batch.pembeli,
-                        jenisIkan: item.jenis,
-                        jumlah: item.jumlah,
-                        harga: item.harga,
-                        total: item.subtotal,
-                        dp: dpForItem,
-                        bongkaran: bongkaranValue,
-                        metodePembayaran: batch.metode,
-                        kodeTransaksi: kodeTransaksiBatch
+                    await fetch(SCRIPT_URL, {
+                        method: "POST",
+                        mode: "no-cors",
+                        headers: {"Content-Type": "application/json"},
+                        body: JSON.stringify({
+                            tanggal: tanggalUTC,
+                            hari: hari,
+                            pembeli: batch.pembeli,
+                            jenisIkan: item.jenis,
+                            jumlah: item.jumlah,
+                            harga: item.harga,
+                            total: item.subtotal,
+                            dp: dpForItem,
+                            bongkaran: bongkaranValue,
+                            metodePembayaran: batch.metode
+                        })
                     });
                     totalSaved++;
-                    updateModalProgressSimpan(totalSaved, totalItemUntukDisimpan, '<i class="fas fa-check-circle me-1 text-success"></i> Tersimpan: ' + detailHtml);
                 } catch(err) {
                     allSuccess = false;
                     errorMsg = err.message;
-                    updateModalProgressSimpan(totalSaved, totalItemUntukDisimpan, '<i class="fas fa-exclamation-triangle me-1 text-danger"></i> Gagal menyimpan: ' + detailHtml);
                     break;
                 }
             }
             if (!allSuccess) break;
         }
-        sembunyikanModalProgressSimpan();
         btnSimpan.prop('disabled', false).html('<i class="fas fa-save me-2"></i> Simpan Semua Transaksi');
         if (allSuccess) {
             alert('✓ ' + totalSaved + ' item berhasil disimpan dari ' + batchItems.length + ' transaksi!');
@@ -859,59 +581,28 @@
             clearBatch();
             for (var i = 0; i < DEFAULT_BATCH_COUNT; i++) {
                 var pembeli = (i < DEFAULT_PEMBELI.length) ? DEFAULT_PEMBELI[i] : '';
-                addBatchItem(pembeli, bongkaranGlobal, 0, $('#metodePembayaranBatch').val() || 'Non Kontan', false);
+                addBatchItem(pembeli, bongkaranGlobal, 0, $('#metodePembayaranBatch').val() || 'Non Kontan');
             }
             updateBatchSummary();
             $('#tanggal').val(tanggalWIB).trigger('change');
             $('#tanggalInfo').html("📅 Menggunakan tanggal transaksi terakhir: " + formatTanggalIndonesia(tanggalWIB));
-            
-            setTimeout(function() {
-                pastiScrollKeAtas();
-                setTimeout(function() {
-                    pastiFocusKeElement('#tanggal');
-                }, 300);
-            }, 500);
         } else {
             alert('⚠️ Gagal menyimpan: ' + errorMsg);
         }
     }
 
     // ==================== LOAD DATA ====================
-    function getTodayStr() {
-        var today = new Date();
-        return today.getFullYear() + '-' + String(today.getMonth()+1).padStart(2,'0') + '-' + String(today.getDate()).padStart(2,'0');
-    }
-
-    function getDateNDaysAgoStr(n) {
-        var d = new Date();
-        d.setDate(d.getDate() - n);
-        return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
-    }
-
-    // loadAllData(fullHistory) - fullHistory=false (default): hanya menampung 30 hari terakhir
-    // di memori agar tabel & filter tetap ringan. fullHistory=true: muat seluruh histori.
-    async function loadAllData(fullHistory) {
-        fullHistory = !!fullHistory;
+    async function loadAllData() {
         try {
             $('#connectionStatus').removeClass('error success').addClass('success').html('<div class="loading-spinner"></div> Menghubungkan ke database...').show();
-
-            // Catatan: parameter query di bawah ini bersifat opsional. Jika backend
-            // Apps Script (doGet) belum mendukungnya, parameter akan diabaikan dan
-            // seluruh data tetap dikirim seperti biasa (tidak akan error).
-            var url = SCRIPT_URL;
-            if (!fullHistory) {
-                var sep = url.indexOf('?') === -1 ? '?' : '&';
-                url += sep + 'tglMulai=' + getDateNDaysAgoStr(DEFAULT_LOAD_DAYS) + '&tglSelesai=' + getTodayStr();
-            }
-
-            var response = await fetch(url);
+            var response = await fetch(SCRIPT_URL);
             var result = await response.json();
             if (result.status === 'success') {
                 masterData.pembeli = result.pembeli || [];
                 masterData.ikan = result.ikan || [];
                 masterData.bongkaran = result.bongkaran || [];
                 masterData.metodePembayaran = result.metodePembayaran || ['Non Kontan','Kontan','Transfer','Tempo'];
-                var rekapAll = (result.rekap || []).map(function(item) {
+                masterData.rekap = (result.rekap || []).map(function(item) {
                     var newItem = Object.assign({}, item);
                     if (newItem.tanggal) {
                         newItem.tanggal_utc = newItem.tanggal;
@@ -923,28 +614,13 @@
                     if (newItem.dp === undefined) newItem.dp = 0;
                     return newItem;
                 });
-                rekapAll.sort(function(a,b) { return a.tanggal > b.tanggal ? -1 : a.tanggal < b.tanggal ? 1 : 0; });
-
-                // Jika backend TIDAK mendukung filter tanggal via query, rekapAll masih berisi
-                // semua data. Kita tetap potong di sisi client supaya render & memori ringan,
-                // kecuali user secara eksplisit meminta "Muat Semua Data".
-                if (fullHistory) {
-                    masterData.rekap = rekapAll;
-                    isFullHistoryLoaded = true;
-                } else {
-                    var cutoff = getDateNDaysAgoStr(DEFAULT_LOAD_DAYS);
-                    masterData.rekap = rekapAll.filter(function(item) {
-                        return item.tanggal >= cutoff;
-                    });
-                    isFullHistoryLoaded = (masterData.rekap.length === rekapAll.length);
-                }
-                masterDataFull = rekapAll;
-
-                var todayStr = getTodayStr();
+                masterData.rekap.sort(function(a,b) { return a.tanggal > b.tanggal ? -1 : a.tanggal < b.tanggal ? 1 : 0; });
+                var today = new Date();
+                var todayStr = today.getFullYear() + '-' + String(today.getMonth()+1).padStart(2,'0') + '-' + String(today.getDate()).padStart(2,'0');
                 var defaultDate = todayStr;
                 var infoText = "📅 Menggunakan tanggal hari ini (belum ada transaksi)";
-                if (masterDataFull.length > 0) {
-                    var lastTransactionDate = masterDataFull[0].tanggal;
+                if (masterData.rekap.length > 0) {
+                    var lastTransactionDate = masterData.rekap[0].tanggal;
                     if (lastTransactionDate) {
                         defaultDate = lastTransactionDate;
                         infoText = "📅 Menggunakan tanggal transaksi terakhir: " + formatTanggalIndonesia(lastTransactionDate);
@@ -952,6 +628,7 @@
                 }
                 $('#tanggal').val(defaultDate).trigger('change');
                 $('#tanggalInfo').html(infoText);
+                $('#debugInfo').html("✅ Data berhasil dimuat. Ikan: " + masterData.ikan.length + ", Pembeli: " + masterData.pembeli.length + ", Bongkaran: " + masterData.bongkaran.length + ", Transaksi: " + masterData.rekap.length);
                 var metodeSelect = $('#metodePembayaranBatch');
                 metodeSelect.empty();
                 if (masterData.metodePembayaran && masterData.metodePembayaran.length) {
@@ -968,53 +645,24 @@
                 if (batchItems.length === 0) {
                     for (var i = 0; i < DEFAULT_BATCH_COUNT; i++) {
                         var pembeli = (i < DEFAULT_PEMBELI.length) ? DEFAULT_PEMBELI[i] : '';
-                        addBatchItem(pembeli, '', 0, 'Non Kontan', false);
+                        addBatchItem(pembeli, '', 0, 'Non Kontan');
                     }
                     updateBatchSummary();
                 }
                 refreshMasterDisplay();
                 $('#connectionStatus').html('<i class="fas fa-check-circle me-2"></i> Database terhubung!').fadeIn().delay(2000).fadeOut();
                 dbConnected = true;
-
-                if (!fullHistory) {
-                    $('#filterTglMulai').val(getDateNDaysAgoStr(DEFAULT_LOAD_DAYS));
-                    $('#filterTglSelesai').val(todayStr);
-                }
+                $('#filterTglMulai').val(todayStr);
+                $('#filterTglSelesai').val(todayStr);
                 $('#bongkaranTanggalSelect').val(todayStr);
-                updateMuatSemuaDataBanner();
                 filterData();
                 tampilkanRekapBongkaran();
-                
-                setTimeout(function() {
-                    pastiScrollKeAtas();
-                    setTimeout(function() {
-                        pastiFocusKeElement('#tanggal');
-                    }, 300);
-                }, 700);
-                
             } else throw new Error(result.message || 'Gagal mengambil data');
         } catch(err) {
             $('#connectionStatus').removeClass('success').addClass('error').html('<i class="fas fa-exclamation-triangle me-2"></i> Gagal koneksi: ' + err.message).show();
+            $('#debugInfo').html("❌ Error: " + err.message + "<br><br>🔗 Pastikan URL Web App sudah benar");
             dbConnected = false;
         }
-    }
-
-    // Tampilkan info/tombol "Muat Semua Data" bila data yang aktif baru sebagian (30 hari terakhir)
-    function updateMuatSemuaDataBanner() {
-        var box = $('#muatSemuaDataBox');
-        if (!box.length) return;
-        if (isFullHistoryLoaded) {
-            box.hide();
-        } else {
-            box.show();
-        }
-    }
-
-    async function muatSemuaData() {
-        var btn = $('#btnMuatSemuaData');
-        btn.prop('disabled', true).html('<div class="loading-spinner"></div> Memuat seluruh histori...');
-        await loadAllData(true);
-        btn.prop('disabled', false).html('<i class="fas fa-history me-2"></i> Muat Semua Data');
     }
 
     // ==================== FILTER FUNCTIONS ====================
@@ -1026,19 +674,7 @@
                 filter.append('<option value="' + masterData.pembeli[i] + '">' + masterData.pembeli[i] + '</option>');
             }
         }
-        filter.select2({ theme: 'default', width: '100%', placeholder: 'Klik lalu ketik', allowClear: true });
-
-        var filterGrup = $('#filterPembeliGrup');
-        if (filterGrup.length) {
-            filterGrup.empty().append('<option value="all">Semua Pembeli</option>');
-            if (masterData.pembeli && masterData.pembeli.length) {
-                for (var i = 0; i < masterData.pembeli.length; i++) {
-                    filterGrup.append('<option value="' + masterData.pembeli[i] + '">' + masterData.pembeli[i] + '</option>');
-                }
-            }
-            if (filterGrup.data('select2')) filterGrup.select2('destroy');
-            filterGrup.select2({ theme: 'default', width: '100%', placeholder: 'Klik lalu ketik', allowClear: true });
-        }
+        filter.select2({ theme: 'default', width: '100%', placeholder: 'Klik lalu ketik nama pembeli', allowClear: true });
     }
 
     function updateFilterMetodePembayaran() {
@@ -1108,8 +744,6 @@
         }
     }
 
-    var lastFilteredRekap = [];
-
     function filterData() {
         var filtered = masterData.rekap.slice();
         var tglMulai = $('#filterTglMulai').val();
@@ -1120,61 +754,7 @@
         if (tglSelesai) filtered = filtered.filter(function(i) { return i.tanggal <= tglSelesai; });
         if (pembeli && pembeli !== 'all') filtered = filtered.filter(function(i) { return i.pembeli === pembeli; });
         if (metode && metode !== 'all') filtered = filtered.filter(function(i) { return i.metodePembayaran === metode; });
-        lastFilteredRekap = filtered;
         displayRekapTable(filtered);
-    }
-
-    // ==================== EXPORT KE SPREADSHEET (EXCEL / CSV) ====================
-    function exportRekapKeSpreadsheet() {
-        if (!lastFilteredRekap.length) {
-            alert('Tidak ada data untuk diexport. Silakan tampilkan data terlebih dahulu.');
-            return;
-        }
-        var rows = lastFilteredRekap.map(function(item, idx) {
-            return {
-                'No': idx + 1,
-                'Hari': item.hari,
-                'Tanggal': formatTanggalIndonesia(item.tanggal),
-                'Pembeli': item.pembeli,
-                'Jenis Ikan': item.jenisIkan,
-                'Jumlah (kg)': item.jumlah,
-                'Harga (Rp)': item.harga,
-                'Total (Rp)': item.total,
-                'DP (Rp)': item.dp || 0,
-                'Bongkaran': item.bongkaran || '-',
-                'Metode Bayar': item.metodePembayaran || '-'
-            };
-        });
-        var grandTotal = lastFilteredRekap.reduce(function(sum, it) { return sum + (it.total || 0); }, 0);
-        rows.push({ 'No': '', 'Hari': '', 'Tanggal': '', 'Pembeli': '', 'Jenis Ikan': '', 'Jumlah (kg)': '', 'Harga (Rp)': '', 'Total (Rp)': grandTotal, 'DP (Rp)': '', 'Bongkaran': '', 'Metode Bayar': 'GRAND TOTAL' });
-
-        var tglMulai = $('#filterTglMulai').val() || 'awal';
-        var tglSelesai = $('#filterTglSelesai').val() || 'akhir';
-        var filename = 'Rekap_Ikan_RPU_' + tglMulai + '_sd_' + tglSelesai;
-
-        if (window.XLSX) {
-            var ws = XLSX.utils.json_to_sheet(rows);
-            var wb = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(wb, ws, 'Rekap Penjualan');
-            XLSX.writeFile(wb, filename + '.xlsx');
-        } else {
-            // Fallback CSV bila library SheetJS gagal dimuat (mis. tidak ada internet)
-            var headers = Object.keys(rows[0]);
-            var csv = headers.join(';') + '\n';
-            rows.forEach(function(r) {
-                csv += headers.map(function(h) {
-                    var v = (r[h] === undefined || r[h] === null) ? '' : String(r[h]);
-                    return '"' + v.replace(/"/g, '""') + '"';
-                }).join(';') + '\n';
-            });
-            var blob = new Blob(["\uFEFF" + csv], { type: 'text/csv;charset=utf-8;' });
-            var link = document.createElement('a');
-            link.href = URL.createObjectURL(blob);
-            link.download = filename + '.csv';
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-        }
     }
 
     function displayRekapTable(data) {
@@ -1185,291 +765,13 @@
             var item = data[i];
             html += '<tr><td class="text-center">' + (i+1) + '</td><td class="text-center">' + item.hari + '</td><td class="text-center">' + formatTanggalIndonesia(item.tanggal) + '</td>' +
                 '<td class="text-center">' + item.pembeli + '</td><td>' + item.jenisIkan + '</td>' +
-                '<td class="text-end">' + formatNumber(item.jumlah) + '</td>' +
+                '<td class="text-end">' + parseFloat(item.jumlah).toLocaleString('id-ID') + '</td>' +
                 '<td class="text-end">' + formatRupiah(item.harga) + '</td><td class="text-end fw-bold text-primary">' + formatRupiah(item.total) + '</td></tr>';
         }
         var grandTotal = 0;
         for (var i = 0; i < data.length; i++) grandTotal += (data[i].total || 0);
         html += '<tr class="grand-total-row"><td colspan="7" class="text-end fw-bold">GRAND TOTAL:</td><td class="text-end fw-bold text-success">' + formatRupiah(grandTotal) + '</td></tr></tbody></table></div>';
         container.html(html);
-    }
-
-    // ==================== SIDEBAR TAB REKAP (Cetak vs Rekap Transaksi) ====================
-    function setupRekapSidebar() {
-        $(document).on('click', '#rekapSidebar .list-group-item', function() {
-            var target = $(this).data('subtab');
-            $('#rekapSidebar .list-group-item').removeClass('active');
-            $(this).addClass('active');
-            $('.rekap-subtab').hide();
-            $('#' + target).show();
-            if (target === 'subtabRekapTransaksi' && !lastGroupedTransaksi.length) {
-                filterDataGrup();
-            }
-        });
-    }
-
-    // ==================== REKAP TRANSAKSI (DIKELOMPOKKAN PER BATCH INPUT) ====================
-    var lastGroupedTransaksi = [];
-    var editTransaksiState = null;
-
-    // Mengelompokkan baris-baris rekap (flat) menjadi kelompok per transaksi/batch input,
-    // berdasarkan Kode Transaksi (kolom baru di backend). Baris lama yang belum punya
-    // Kode Transaksi (data sebelum update ini) otomatis dianggap 1 baris = 1 transaksi sendiri,
-    // supaya tidak salah menggabungkan data lama.
-    function groupRekapMenjadiTransaksi(data) {
-        var groups = [];
-        var currentGroup = null;
-        for (var i = 0; i < data.length; i++) {
-            var item = data[i];
-            var kode = item.kodeTransaksi || '';
-            var isSameAsPrev = currentGroup && kode && currentGroup.kodeTransaksi === kode;
-            if (!isSameAsPrev) {
-                currentGroup = {
-                    kodeTransaksi: kode,
-                    tanggal: item.tanggal,
-                    tanggal_utc: item.tanggal_utc || item.tanggal,
-                    hari: item.hari,
-                    pembeli: item.pembeli,
-                    bongkaran: item.bongkaran,
-                    metodePembayaran: item.metodePembayaran,
-                    dp: 0,
-                    total: 0,
-                    items: []
-                };
-                groups.push(currentGroup);
-            }
-            currentGroup.items.push(item);
-            currentGroup.total += (item.total || 0);
-            currentGroup.dp += (item.dp || 0);
-        }
-        return groups;
-    }
-
-    function filterDataGrup() {
-        var filtered = masterData.rekap.slice();
-        var tglMulai = $('#filterTglMulaiGrup').val();
-        var tglSelesai = $('#filterTglSelesaiGrup').val();
-        var pembeli = $('#filterPembeliGrup').val();
-        if (tglMulai) filtered = filtered.filter(function(i) { return i.tanggal >= tglMulai; });
-        if (tglSelesai) filtered = filtered.filter(function(i) { return i.tanggal <= tglSelesai; });
-        if (pembeli && pembeli !== 'all') filtered = filtered.filter(function(i) { return i.pembeli === pembeli; });
-        lastGroupedTransaksi = groupRekapMenjadiTransaksi(filtered);
-        displayRekapTransaksiTable(lastGroupedTransaksi);
-    }
-
-    function displayRekapTransaksiTable(groups) {
-        var container = $('#rekapTransaksiTableContainer');
-        if (!groups.length) { container.html('<div class="alert alert-info">Tidak ada data</div>'); return; }
-        var html = '<div class="rekap-table-container"><table class="rekap-table"><thead><tr>' +
-            '<th>No</th><th>Tanggal</th><th>Pembeli</th><th>Item Ikan</th><th>Jumlah Item</th>' +
-            '<th>Total (Rp)</th><th>DP (Rp)</th><th>Sisa (Rp)</th><th>Metode</th><th>Aksi</th></tr></thead><tbody>';
-        var grandTotal = 0, grandDp = 0;
-        for (var i = 0; i < groups.length; i++) {
-            var g = groups[i];
-            var namaIkan = g.items.map(function(it) { return it.jenisIkan; }).join(', ');
-            var sisa = g.total - g.dp;
-            grandTotal += g.total;
-            grandDp += g.dp;
-            html += '<tr>' +
-                '<td class="text-center">' + (i + 1) + '</td>' +
-                '<td class="text-center">' + formatTanggalIndonesia(g.tanggal) + '</td>' +
-                '<td class="text-center">' + g.pembeli + '</td>' +
-                '<td>' + namaIkan + '</td>' +
-                '<td class="text-center">' + g.items.length + '</td>' +
-                '<td class="text-end fw-bold text-primary">' + formatRupiah(g.total) + '</td>' +
-                '<td class="text-end">' + formatRupiah(g.dp) + '</td>' +
-                '<td class="text-end">' + formatRupiah(sisa) + '</td>' +
-                '<td class="text-center">' + (g.metodePembayaran || '-') + '</td>' +
-                '<td class="text-center"><button type="button" class="btn btn-sm btn-primary btn-edit-transaksi" data-index="' + i + '"><i class="fas fa-edit"></i> Edit</button></td>' +
-                '</tr>';
-        }
-        html += '<tr class="grand-total-row"><td colspan="5" class="text-end fw-bold">GRAND TOTAL:</td>' +
-            '<td class="text-end fw-bold text-success">' + formatRupiah(grandTotal) + '</td>' +
-            '<td class="text-end fw-bold">' + formatRupiah(grandDp) + '</td>' +
-            '<td class="text-end fw-bold">' + formatRupiah(grandTotal - grandDp) + '</td><td></td><td></td></tr>';
-        html += '</tbody></table></div>';
-        container.html(html);
-    }
-
-    // ==================== MODAL EDIT TRANSAKSI ====================
-    function bukaModalEditTransaksi(groupIndex) {
-        var group = lastGroupedTransaksi[groupIndex];
-        if (!group) return;
-
-        editTransaksiState = {
-            kodeTransaksi: group.kodeTransaksi || '',
-            originalRowIndexes: group.items.map(function(it) { return it.rowIndex; }),
-            deletedRowIndexes: [],
-            items: group.items.map(function(it) {
-                return { rowIndex: it.rowIndex, jenis: it.jenisIkan, jumlah: it.jumlah, harga: it.harga, subtotal: it.total };
-            })
-        };
-
-        $('#editTrxTanggal').val(group.tanggal_utc ? convertUTCtoWIB(group.tanggal_utc) : group.tanggal);
-        $('#editTrxDp').val(group.dp || 0);
-        $('#editTrxBongkaran').val(group.bongkaran || '');
-
-        var selectPembeli = $('#editTrxPembeli');
-        selectPembeli.empty();
-        (masterData.pembeli || []).forEach(function(p) {
-            selectPembeli.append('<option value="' + p + '" ' + (p === group.pembeli ? 'selected' : '') + '>' + p + '</option>');
-        });
-        if (selectPembeli.data('select2')) selectPembeli.select2('destroy');
-        setupStartsWithSearch('#editTrxPembeli', false);
-
-        var selectMetode = $('#editTrxMetode');
-        selectMetode.empty();
-        (masterData.metodePembayaran || []).forEach(function(m) {
-            selectMetode.append('<option value="' + m + '" ' + (m === group.metodePembayaran ? 'selected' : '') + '>' + m + '</option>');
-        });
-
-        renderEditTrxItemsTable();
-
-        var modalEl = document.getElementById('modalEditTransaksi');
-        bootstrap.Modal.getOrCreateInstance(modalEl).show();
-    }
-
-    function renderEditTrxItemsTable() {
-        var tbody = $('#editTrxItemsBody');
-        var html = '';
-        editTransaksiState.items.forEach(function(row, i) {
-            html += '<tr data-row="' + i + '">';
-            html += '<td><select class="form-select form-select-sm select-ikan-edit-trx" data-row="' + i + '" style="width:100%;">';
-            html += '<option value="">Pilih</option>';
-            (masterData.ikan || []).forEach(function(ikan) {
-                var namaIkan = typeof ikan === 'object' ? (ikan.nama || ikan) : ikan;
-                var hargaDefault = typeof ikan === 'object' ? (ikan.hargaDefault || ikan.harga || 0) : 0;
-                var selected = (namaIkan === row.jenis) ? 'selected' : '';
-                html += '<option value="' + namaIkan + '" data-harga="' + hargaDefault + '" ' + selected + '>' + namaIkan + (hargaDefault > 0 ? ' (Rp ' + formatNumber(hargaDefault) + ')' : '') + '</option>';
-            });
-            html += '</select></td>';
-            html += '<td><input type="number" step="0.001" class="form-control form-control-sm text-end input-jumlah-edit-trx" data-row="' + i + '" value="' + (row.jumlah || '') + '" placeholder="0" inputmode="decimal"></td>';
-            html += '<td><input type="number" class="form-control form-control-sm text-end input-harga-edit-trx" data-row="' + i + '" value="' + (row.harga || '') + '" placeholder="0" inputmode="numeric"></td>';
-            html += '<td><input type="text" class="form-control form-control-sm text-end" readonly style="background:#f0f2f5; font-weight:600; color:#2c7da0; font-size:11px;" value="' + formatRupiah(row.subtotal || 0) + '"></td>';
-            html += '<td class="text-center"><button type="button" class="btn btn-danger btn-sm btn-hapus-item-edit-trx" data-row="' + i + '" style="padding:2px 4px; font-size:9px; min-height:22px; height:22px; width:22px; border-radius:4px;"><i class="fas fa-trash-alt" style="font-size:9px;"></i></button></td>';
-            html += '</tr>';
-        });
-        tbody.html(html);
-        $('.select-ikan-edit-trx').each(function() { setupSelect2Ikan(this); });
-        updateEditTrxTotalDisplay();
-    }
-
-    function updateEditTrxTotalDisplay() {
-        var total = 0;
-        editTransaksiState.items.forEach(function(row) { total += (row.subtotal || 0); });
-        $('#editTrxTotalDisplay').text(formatRupiah(total));
-    }
-
-    function hitungSubtotalEditTrx(rowIdx) {
-        var row = editTransaksiState.items[rowIdx];
-        if (!row) return;
-        row.subtotal = (row.jumlah || 0) * (row.harga || 0);
-        var tr = $('#editTrxItemsBody tr[data-row="' + rowIdx + '"]');
-        tr.find('input[readonly]').val(formatRupiah(row.subtotal));
-        updateEditTrxTotalDisplay();
-    }
-
-    function tambahItemEditTrx() {
-        editTransaksiState.items.push({ rowIndex: null, jenis: '', jumlah: 0, harga: 0, subtotal: 0 });
-        renderEditTrxItemsTable();
-    }
-
-    function hapusItemEditTrx(rowIdx) {
-        var row = editTransaksiState.items[rowIdx];
-        if (!row) return;
-        if (row.rowIndex !== null && row.rowIndex !== undefined) {
-            editTransaksiState.deletedRowIndexes.push(row.rowIndex);
-        }
-        editTransaksiState.items.splice(rowIdx, 1);
-        renderEditTrxItemsTable();
-    }
-
-    async function simpanEditTransaksi() {
-        var pembeli = $('#editTrxPembeli').val();
-        var metode = $('#editTrxMetode').val();
-        var tanggalWIB = $('#editTrxTanggal').val();
-        var bongkaran = $('#editTrxBongkaran').val() || '-';
-        var dp = parseFloat($('#editTrxDp').val()) || 0;
-
-        if (!tanggalWIB) { alert('Tanggal wajib diisi!'); return; }
-        if (!pembeli) { alert('Pembeli wajib dipilih!'); return; }
-        if (!metode) { alert('Metode pembayaran wajib dipilih!'); return; }
-
-        var itemsValid = [];
-        var deletedRowIndexes = editTransaksiState.deletedRowIndexes.slice();
-        editTransaksiState.items.forEach(function(row) {
-            if (row.jenis && row.jumlah > 0 && row.harga > 0) {
-                itemsValid.push({
-                    rowIndex: (row.rowIndex === undefined) ? null : row.rowIndex,
-                    jenisIkan: row.jenis,
-                    jumlah: row.jumlah,
-                    harga: row.harga,
-                    subtotal: row.jumlah * row.harga
-                });
-            } else if (row.rowIndex !== null && row.rowIndex !== undefined) {
-                // Baris lama dikosongkan oleh user -> dianggap dihapus dari transaksi
-                deletedRowIndexes.push(row.rowIndex);
-            }
-        });
-
-        if (!itemsValid.length) {
-            alert('Minimal harus ada 1 item ikan dengan jenis, jumlah, dan harga terisi!');
-            return;
-        }
-
-        var totalBaru = itemsValid.reduce(function(sum, it) { return sum + it.subtotal; }, 0);
-        if (dp > totalBaru) {
-            alert('DP tidak boleh lebih besar dari Total (Rp ' + formatNumber(totalBaru) + ')!');
-            return;
-        }
-
-        var btn = $('#btnSimpanEditTransaksi');
-        var originalHtml = btn.html();
-        btn.prop('disabled', true).html('<div class="loading-spinner"></div> Menyimpan...');
-
-        try {
-            await postToServer({
-                action: 'updateTransaksiBatch',
-                kodeTransaksi: editTransaksiState.kodeTransaksi,
-                tanggal: convertWIBtoUTC(tanggalWIB),
-                hari: getHariFromDate(tanggalWIB),
-                pembeli: pembeli,
-                bongkaran: bongkaran,
-                metodePembayaran: metode,
-                dp: dp,
-                items: itemsValid,
-                deletedRowIndexes: deletedRowIndexes
-            });
-            bootstrap.Modal.getInstance(document.getElementById('modalEditTransaksi')).hide();
-            await loadAllData(isFullHistoryLoaded);
-            filterDataGrup();
-            alert('✓ Transaksi berhasil diupdate!');
-        } catch (err) {
-            alert('⚠️ Gagal menyimpan: ' + err.message);
-        } finally {
-            btn.prop('disabled', false).html(originalHtml);
-        }
-    }
-
-    async function hapusTransaksiIni() {
-        if (!confirm('Yakin ingin menghapus SELURUH transaksi ini (' + editTransaksiState.originalRowIndexes.length + ' item ikan)? Aksi ini tidak bisa dibatalkan.')) return;
-        var btn = $('#btnHapusTransaksiIni');
-        var originalHtml = btn.html();
-        btn.prop('disabled', true).html('<div class="loading-spinner"></div> Menghapus...');
-        try {
-            await postToServer({
-                action: 'deleteTransaksiBatch',
-                rowIndexes: editTransaksiState.originalRowIndexes
-            });
-            bootstrap.Modal.getInstance(document.getElementById('modalEditTransaksi')).hide();
-            await loadAllData(isFullHistoryLoaded);
-            filterDataGrup();
-            alert('✓ Transaksi berhasil dihapus!');
-        } catch (err) {
-            alert('⚠️ Gagal menghapus: ' + err.message);
-        } finally {
-            btn.prop('disabled', false).html(originalHtml);
-        }
     }
 
     // ==================== REKAP BONGKARAN ====================
@@ -1513,15 +815,15 @@
                 var ikan = sorted[i][0];
                 var kg = sorted[i][1];
                 totalKg += kg;
-                html += '<tr><td class="text-center">' + counter++ + '</td><td>' + ikan + '</td><td class="text-end fw-bold">' + formatNumber(kg) + '</td>' +
+                html += '<tr><td class="text-center">' + counter++ + '</td><td>' + ikan + '</td><td class="text-end fw-bold">' + kg.toLocaleString('id-ID') + '</td>' +
                     '<td class="text-center"><span class="badge-metode">' + metode + '</span></td></tr>';
             }
             html += '<tr class="sub-bongkaran-total"><td colspan="2" class="text-end fw-bold">TOTAL ' + bongkaran + '</td>' +
-                '<td class="text-end fw-bold">' + formatNumber(totalKg) + '</td><td>-</td></tr>' +
+                '<td class="text-end fw-bold">' + totalKg.toLocaleString('id-ID') + '</td><td>-</td></tr>' +
                 '</tbody></table></div></div>';
             grandTotal += totalKg;
         }
-        html += '<div class="total-box mt-3"><h4>GRAND TOTAL</h4><p>Tanggal: ' + tglFormatted + ' (' + hari + ') | Total Kg: <strong>' + formatNumber(grandTotal) + ' kg</strong></p></div>';
+        html += '<div class="total-box mt-3"><h4>GRAND TOTAL</h4><p>Tanggal: ' + tglFormatted + ' (' + hari + ') | Total Kg: <strong>' + grandTotal.toLocaleString('id-ID') + ' kg</strong></p></div>';
         $('#bongkaranTableContainer').html(html);
     }
 
@@ -1540,7 +842,7 @@
         } else {
             tbody.append('<tr><td colspan="2" class="text-center">Belum ada data</td></tr>');
         }
-        $('#pembeliCount').text('Total: ' + masterData.pembeli.length);
+        $('#pembeliCount').text('Total: ' + masterData.pembeli.length + ' pembeli');
     }
 
     function displayIkanList(filterText) {
@@ -1555,34 +857,25 @@
                 return nama.toLowerCase().indexOf(lowerFilter) !== -1;
             });
         }
-        var lastUpdateMap = getLastUpdateMap();
         if (dataToShow.length) {
             for (var i = 0; i < dataToShow.length; i++) {
                 var item = dataToShow[i];
                 var nama = typeof item === 'object' ? (item.nama || item) : item;
                 var harga = typeof item === 'object' ? (item.hargaDefault || item.harga || 0) : 0;
-                var lastUpdate = lastUpdateMap[nama] ? formatWaktuSingkat(lastUpdateMap[nama]) : '-';
-                tbody.append('<tr>' +
-                    '<td class="text-center"><input type="checkbox" class="chk-ikan-bulk" data-ikan="' + nama + '" data-harga="' + harga + '"></td>' +
-                    '<td class="text-center">' + (i+1) + '</td>' +
-                    '<td>' + nama + '</td>' +
-                    '<td><input type="number" min="0" class="form-control form-control-sm harga-edit" data-ikan="' + nama + '" data-harga-lama="' + harga + '" value="' + harga + '" step="500" style="width:110px;display:inline-block">' +
+                tbody.append('<tr><td class="text-center">' + (i+1) + '</td><td>' + nama + '</td>' +
+                    '<td><input type="number" class="form-control form-control-sm harga-edit" data-ikan="' + nama + '" value="' + harga + '" step="500" style="width:150px;display:inline-block">' +
                     '<button class="btn btn-sm btn-primary btn-update-harga" data-ikan="' + nama + '"><i class="fas fa-save"></i></button></td>' +
-                    '<td class="text-center small text-muted">' + lastUpdate + '</td>' +
                     '<td class="text-center"><button class="btn btn-sm btn-danger btn-delete-ikan" data-ikan="' + nama + '"><i class="fas fa-trash"></i></button></td></tr>');
             }
         } else {
-            tbody.append('<tr><td colspan="6" class="text-center text-muted">Tidak ada data untuk "' + filterText + '"</td></tr>');
+            tbody.append('<tr><td colspan="4" class="text-center text-muted">Tidak ada data ikan yang ditemukan untuk "' + filterText + '"</td></tr>');
         }
-        $('#ikanCount').text('Total: ' + dataToShow.length + ' / ' + masterData.ikan.length);
-        $('#chkSelectAllIkan').prop('checked', false);
+        $('#ikanCount').text('Total: ' + dataToShow.length + ' / ' + masterData.ikan.length + ' jenis ikan');
         $('.btn-update-harga').off('click').on('click', async function() {
-            var row = $(this).closest('tr');
-            var hargaLama = parseFloat(row.find('.harga-edit').data('harga-lama')) || 0;
-            await updateHargaIkan($(this).data('ikan'), row.find('.harga-edit').val(), hargaLama, this);
+            await updateHargaIkan($(this).data('ikan'), $(this).closest('tr').find('.harga-edit').val());
         });
         $('.btn-delete-ikan').off('click').on('click', async function() {
-            if (confirm('Hapus ikan "' + $(this).data('ikan') + '"? Tindakan ini tidak bisa dibatalkan.')) await deleteIkan($(this).data('ikan'));
+            if (confirm('Hapus ikan "' + $(this).data('ikan') + '"?')) await deleteIkan($(this).data('ikan'));
         });
     }
 
@@ -1598,7 +891,7 @@
             if (unique.length) {
                 for (var i = 0; i < unique.length; i++) {
                     tbody.append('<tr><td class="text-center">' + (i+1) + '</td><td>' + unique[i] + '</td>' +
-                        '<td class="text-center"><button class="btn btn-sm btn-danger btn-delete-bongkaran" data-bongkaran="' + unique[i].replace(/"/g,'&quot;') + '"><i class="fas fa-trash"></i></button></td></tr>');
+                        '<td class="text-center"><button class="btn btn-sm btn-danger btn-delete-bongkaran" data-bongkaran="' + unique[i].replace(/"/g,'&quot;') + '"><i class="fas fa-trash"></i> Hapus</button></td></tr>');
                 }
             } else {
                 tbody.append('<tr><td colspan="3" class="text-center">Belum ada data</td></tr>');
@@ -1606,7 +899,7 @@
         } else {
             tbody.append('<tr><td colspan="3" class="text-center">Belum ada data</td></tr>');
         }
-        $('#bongkaranCount').text('Total: ' + masterData.bongkaran.length);
+        $('#bongkaranCount').text('Total: ' + masterData.bongkaran.length + ' bongkaran');
     }
 
     function refreshMasterDisplay() {
@@ -1617,267 +910,53 @@
 
     // ==================== MASTER CRUD ====================
     async function tambahPembeli(nama) {
-        if (!nama || !nama.trim()) { alert('Nama pembeli tidak boleh kosong!'); return false; }
-        try {
-            await postToServer({ action: "addPembeli", nama: nama.trim() });
-            await loadAllData(isFullHistoryLoaded);
-            refreshMasterDisplay();
-            return true;
-        } catch (err) {
-            alert('⚠️ Gagal menambah pembeli: ' + err.message);
-            return false;
-        }
+        if (!nama.trim()) return false;
+        await fetch(SCRIPT_URL, { method: "POST", mode: "no-cors", body: JSON.stringify({ action: "addPembeli", nama: nama }) });
+        await loadAllData();
+        refreshMasterDisplay();
+        return true;
     }
 
     async function tambahIkan(nama, harga) {
-        if (!nama || !nama.trim()) { alert('Nama ikan tidak boleh kosong!'); return false; }
-        var hargaNum = parseFloat(harga);
-        if (harga === '' || harga === undefined || harga === null || isNaN(hargaNum) || hargaNum <= 0) {
-            alert('⚠️ Harga ikan wajib diisi dan harus lebih dari 0!');
-            return false;
-        }
-        try {
-            await postToServer({ action: "addIkan", nama: nama.trim(), harga: hargaNum });
-            await loadAllData(isFullHistoryLoaded);
-            refreshMasterDisplay();
-            return true;
-        } catch (err) {
-            alert('⚠️ Gagal menambah ikan: ' + err.message);
-            return false;
-        }
+        if (!nama.trim()) return false;
+        await fetch(SCRIPT_URL, { method: "POST", mode: "no-cors", body: JSON.stringify({ action: "addIkan", nama: nama, harga: parseFloat(harga) || 0 }) });
+        await loadAllData();
+        refreshMasterDisplay();
+        return true;
     }
 
-    async function updateHargaIkan(nama, hargaBaru, hargaLama, btnElement) {
-        var hargaNum = parseFloat(hargaBaru);
-        if (hargaBaru === '' || hargaBaru === undefined || hargaBaru === null || isNaN(hargaNum) || hargaNum <= 0) {
-            alert('⚠️ Harga baru wajib diisi dan harus lebih dari 0! Update dibatalkan.');
-            return false;
-        }
-        if (!confirm('Update harga "' + nama + '" dari Rp ' + formatNumber(hargaLama || 0) + ' menjadi Rp ' + formatNumber(hargaNum) + '?')) {
-            return false;
-        }
-        var originalHtml = btnElement ? $(btnElement).html() : null;
-        if (btnElement) $(btnElement).prop('disabled', true).html('<div class="loading-spinner"></div>');
-        try {
-            await postToServer({ action: "updateHargaIkan", nama: nama, harga: hargaNum });
-            addPriceHistory(nama, hargaLama || 0, hargaNum);
-            await loadAllData(isFullHistoryLoaded);
-            refreshMasterDisplay();
-            return true;
-        } catch (err) {
-            alert('⚠️ Gagal update harga: ' + err.message);
-            if (btnElement && originalHtml !== null) $(btnElement).prop('disabled', false).html(originalHtml);
-            return false;
-        }
+    async function updateHargaIkan(nama, hargaBaru) {
+        await fetch(SCRIPT_URL, { method: "POST", mode: "no-cors", body: JSON.stringify({ action: "updateHargaIkan", nama: nama, harga: parseFloat(hargaBaru) || 0 }) });
+        await loadAllData();
+        refreshMasterDisplay();
+        return true;
     }
 
     async function deleteIkan(nama) {
-        try {
-            await postToServer({ action: "deleteIkan", nama: nama });
-            await loadAllData(isFullHistoryLoaded);
-            refreshMasterDisplay();
-            return true;
-        } catch (err) {
-            alert('⚠️ Gagal menghapus ikan: ' + err.message);
-            return false;
-        }
+        await fetch(SCRIPT_URL, { method: "POST", mode: "no-cors", body: JSON.stringify({ action: "deleteIkan", nama: nama }) });
+        await loadAllData();
+        refreshMasterDisplay();
+        return true;
     }
 
     async function tambahBongkaran(nama) {
-        if (!nama || !nama.trim()) { alert('Nama bongkaran tidak boleh kosong!'); return false; }
-        try {
-            await postToServer({ action: "addBongkaran", nama: nama.trim() });
-            await loadAllData(isFullHistoryLoaded);
-            refreshMasterDisplay();
-            updateBongkaranDatalist();
-            return true;
-        } catch (err) {
-            alert('⚠️ Gagal menambah bongkaran: ' + err.message);
-            return false;
-        }
+        if (!nama.trim()) return false;
+        await fetch(SCRIPT_URL, { method: "POST", mode: "no-cors", body: JSON.stringify({ action: "addBongkaran", nama: nama }) });
+        await loadAllData();
+        refreshMasterDisplay();
+        updateBongkaranDatalist();
+        return true;
     }
 
     async function deleteBongkaran(nama) {
-        try {
-            await postToServer({ action: "deleteBongkaran", nama: nama });
-            await loadAllData(isFullHistoryLoaded);
-            refreshMasterDisplay();
-            updateBongkaranDatalist();
-            return true;
-        } catch (err) {
-            alert('⚠️ Gagal menghapus bongkaran: ' + err.message);
-            return false;
-        }
-    }
-
-    // ==================== UPDATE HARGA MASSAL (BULK) ====================
-    function getSelectedIkanForBulk() {
-        var selected = [];
-        $('.chk-ikan-bulk:checked').each(function() {
-            selected.push({
-                nama: $(this).data('ikan'),
-                hargaLama: parseFloat($(this).data('harga')) || 0
-            });
-        });
-        return selected;
-    }
-
-    function hitungHargaBaruBulk(hargaLama, mode, nilai) {
-        var n = parseFloat(nilai) || 0;
-        if (mode === 'fixed') return n;
-        if (mode === 'percent') return Math.max(0, Math.round(hargaLama + (hargaLama * n / 100)));
-        if (mode === 'nominal') return Math.max(0, hargaLama + n);
-        return hargaLama;
-    }
-
-    async function terapkanUpdateHargaMassal() {
-        var selected = getSelectedIkanForBulk();
-        if (!selected.length) {
-            alert('Pilih minimal 1 jenis ikan terlebih dahulu (centang pada daftar ikan)!');
-            return;
-        }
-        var mode = $('input[name="bulkHargaMode"]:checked').val() || 'fixed';
-        var nilai = $('#bulkHargaNilai').val();
-        var nilaiNum = parseFloat(nilai);
-        if (nilai === '' || nilai === undefined || isNaN(nilaiNum)) {
-            alert('⚠️ Masukkan nilai harga/persentase terlebih dahulu!');
-            return;
-        }
-        if (mode === 'fixed' && nilaiNum <= 0) {
-            alert('⚠️ Harga tetap harus lebih dari 0!');
-            return;
-        }
-
-        // Preview singkat sebelum konfirmasi
-        var previewLines = selected.slice(0, 5).map(function(it) {
-            var baru = hitungHargaBaruBulk(it.hargaLama, mode, nilaiNum);
-            return '- ' + it.nama + ': Rp ' + formatNumber(it.hargaLama) + ' → Rp ' + formatNumber(baru);
-        }).join('\n');
-        var more = selected.length > 5 ? '\n... dan ' + (selected.length - 5) + ' ikan lainnya' : '';
-        if (!confirm('Update harga massal untuk ' + selected.length + ' jenis ikan?\n\n' + previewLines + more)) {
-            return;
-        }
-
-        var btn = $('#btnTerapkanBulkHarga');
-        var originalHtml = btn.html();
-        btn.prop('disabled', true);
-        var sukses = 0, gagal = 0, gagalNama = [];
-
-        for (var i = 0; i < selected.length; i++) {
-            var it = selected[i];
-            var hargaBaru = hitungHargaBaruBulk(it.hargaLama, mode, nilaiNum);
-            btn.html('<div class="loading-spinner"></div> Memperbarui ' + (i+1) + '/' + selected.length + '...');
-            try {
-                await postToServer({ action: "updateHargaIkan", nama: it.nama, harga: hargaBaru });
-                addPriceHistory(it.nama, it.hargaLama, hargaBaru);
-                sukses++;
-            } catch (err) {
-                gagal++;
-                gagalNama.push(it.nama);
-            }
-        }
-
-        btn.prop('disabled', false).html(originalHtml);
-        await loadAllData(isFullHistoryLoaded);
+        await fetch(SCRIPT_URL, { method: "POST", mode: "no-cors", body: JSON.stringify({ action: "deleteBongkaran", nama: nama }) });
+        await loadAllData();
         refreshMasterDisplay();
-        $('#bulkHargaNilai').val('');
-
-        if (gagal === 0) {
-            alert('✓ Berhasil update harga ' + sukses + ' jenis ikan!');
-        } else {
-            alert('⚠️ ' + sukses + ' berhasil, ' + gagal + ' gagal (' + gagalNama.join(', ') + ')');
-        }
+        updateBongkaranDatalist();
+        return true;
     }
 
-    // ==================== UPDATE HARGA TERPILIH (NILAI BEDA-BEDA PER IKAN) ====================
-    // Dipakai saat kenaikan harga tidak seragam: user mengubah manual kolom
-    // "Harga (Rp/kg)" langsung di tabel untuk tiap ikan (bisa 1, 2, atau berapa pun,
-    // dan nilainya boleh berbeda-beda), lalu centang ikan yang diubah dan klik tombol
-    // "Simpan Perubahan Harga Terpilih" untuk menyimpan semuanya sekaligus.
-    function getPerubahanHargaTerpilih() {
-        var perubahan = [];
-        $('.chk-ikan-bulk:checked').each(function() {
-            var row = $(this).closest('tr');
-            var nama = $(this).data('ikan');
-            var hargaLama = parseFloat(row.find('.harga-edit').data('harga-lama')) || 0;
-            var hargaBaru = parseFloat(row.find('.harga-edit').val());
-            if (!isNaN(hargaBaru) && hargaBaru > 0 && hargaBaru !== hargaLama) {
-                perubahan.push({ nama: nama, hargaLama: hargaLama, hargaBaru: hargaBaru });
-            }
-        });
-        return perubahan;
-    }
-
-    async function simpanPerubahanHargaTerpilih() {
-        var checked = $('.chk-ikan-bulk:checked').length;
-        if (!checked) {
-            alert('Centang minimal 1 ikan yang harganya ingin diubah terlebih dahulu!');
-            return;
-        }
-        var perubahan = getPerubahanHargaTerpilih();
-        if (!perubahan.length) {
-            alert('⚠️ Tidak ada perubahan harga terdeteksi. Ubah dulu angka di kolom "Harga (Rp/kg)" untuk ikan yang dicentang (nilainya harus beda dari harga sebelumnya dan lebih dari 0).');
-            return;
-        }
-
-        var previewLines = perubahan.map(function(it) {
-            return '- ' + it.nama + ': Rp ' + formatNumber(it.hargaLama) + ' → Rp ' + formatNumber(it.hargaBaru);
-        }).join('\n');
-        if (!confirm('Simpan perubahan harga untuk ' + perubahan.length + ' ikan berikut?\n\n' + previewLines)) {
-            return;
-        }
-
-        var btn = $('#btnSimpanPerubahanIndividual');
-        var originalHtml = btn.html();
-        btn.prop('disabled', true);
-        var sukses = 0, gagal = 0, gagalNama = [];
-
-        for (var i = 0; i < perubahan.length; i++) {
-            var it = perubahan[i];
-            btn.html('<div class="loading-spinner"></div> Menyimpan ' + (i+1) + '/' + perubahan.length + '...');
-            try {
-                await postToServer({ action: "updateHargaIkan", nama: it.nama, harga: it.hargaBaru });
-                addPriceHistory(it.nama, it.hargaLama, it.hargaBaru);
-                sukses++;
-            } catch (err) {
-                gagal++;
-                gagalNama.push(it.nama);
-            }
-        }
-
-        btn.prop('disabled', false).html(originalHtml);
-        await loadAllData(isFullHistoryLoaded);
-        refreshMasterDisplay();
-
-        if (gagal === 0) {
-            alert('✓ Berhasil menyimpan perubahan harga ' + sukses + ' ikan!');
-        } else {
-            alert('⚠️ ' + sukses + ' berhasil, ' + gagal + ' gagal (' + gagalNama.join(', ') + ')');
-        }
-    }
-
-    // ==================== RIWAYAT HARGA (MODAL SEDERHANA) ====================
-    function tampilkanRiwayatHarga() {
-        var hist = getPriceHistory();
-        var body = $('#riwayatHargaBody');
-        body.empty();
-        if (!hist.length) {
-            body.html('<tr><td colspan="4" class="text-center text-muted">Belum ada riwayat perubahan harga di perangkat ini</td></tr>');
-        } else {
-            hist.forEach(function(h, idx) {
-                body.append('<tr><td class="text-center">' + (idx+1) + '</td><td>' + h.nama + '</td>' +
-                    '<td class="text-end">Rp ' + formatNumber(h.hargaLama) + ' → Rp ' + formatNumber(h.hargaBaru) + '</td>' +
-                    '<td class="text-center">' + formatWaktuSingkat(h.waktu) + '</td></tr>');
-            });
-        }
-        var modalEl = document.getElementById('modalRiwayatHarga');
-        if (modalEl && window.bootstrap) {
-            var modal = bootstrap.Modal.getOrCreateInstance(modalEl);
-            modal.show();
-        }
-    }
-
-    // ==================== CETAK LAPORAN - FINAL FIX (TANPA RP DOBEL) ====================
+    // ==================== CETAK LAPORAN ====================
     function cetakRekap() {
         var data = [...masterData.rekap];
         var tglMulai = $('#filterTglMulai').val();
@@ -1961,7 +1040,7 @@
                         htmlContent += '<td rowspan="' + dateItems.length + '" class="text-center" style="vertical-align:top">' + tglFormatted + '</td>';
                     }
                     htmlContent += '<td class="text-center">' + item.jenisIkan + '</td>';
-                    htmlContent += '<td class="text-center">' + formatNumber(item.jumlah) + '</td>';
+                    htmlContent += '<td class="text-center">' + item.jumlah.toLocaleString('id-ID') + '</td>';
                     htmlContent += '<td class="text-start">' + formatRupiah(item.harga) + '</td>';
                     htmlContent += '<td class="text-start">' + formatRupiah(subtotal) + '</td>';
                     if (showDPColumn && i === 0) {
@@ -2030,64 +1109,24 @@
 
         // Button events
         $('#btnTambahBatch').on('click', function() {
-            addBatchItem('', $('#bongkaranBatchGlobal').val() || '', 0, $('#metodePembayaranBatch').val() || 'Non Kontan', true);
+            addBatchItem('', $('#bongkaranBatchGlobal').val() || '', 0, $('#metodePembayaranBatch').val() || 'Non Kontan');
             updateBatchSummary();
+            setTimeout(function() {
+                var lastBatch = $('#batchContainer .batch-item:last-child');
+                if (lastBatch.length) {
+                    $('html, body').animate({ scrollTop: lastBatch.offset().top - 100 }, 300);
+                    lastBatch.find('.select-pembeli-batch').select2('open');
+                }
+            }, 200);
         });
 
         $('#btnSimpanBatch').on('click', saveBatch);
         $('#btnFilterData').on('click', filterData);
         $('#btnCetakRekap').on('click', cetakRekap);
-        $('#btnExportRekap').on('click', exportRekapKeSpreadsheet);
-        $('#btnMuatSemuaData').on('click', muatSemuaData);
         $('#btnTampilkanRekapBongkaran').on('click', tampilkanRekapBongkaran);
         $('#btnCetakRekapBongkaran').on('click', cetakRekapBongkaran);
         $('#searchIkan').on('keyup', function() { displayIkanList($(this).val()); });
         $('#resetSearchIkan').on('click', function() { $('#searchIkan').val(''); displayIkanList(''); });
-        $('#btnRiwayatHarga').on('click', tampilkanRiwayatHarga);
-        $('#btnTerapkanBulkHarga').on('click', terapkanUpdateHargaMassal);
-        $('#btnSimpanPerubahanIndividual').on('click', simpanPerubahanHargaTerpilih);
-        $(document).on('change', '#chkSelectAllIkan', function() {
-            $('.chk-ikan-bulk').prop('checked', $(this).is(':checked'));
-        });
-
-        // ==== TAB REKAP: sidebar Cetak/Rekap & fitur edit transaksi ====
-        setupRekapSidebar();
-        $('#btnFilterDataGrup').on('click', filterDataGrup);
-        $(document).on('click', '.btn-edit-transaksi', function() {
-            bukaModalEditTransaksi(parseInt($(this).data('index'), 10));
-        });
-        $('#btnTambahItemEditTrx').on('click', tambahItemEditTrx);
-        $(document).on('click', '.btn-hapus-item-edit-trx', function() {
-            hapusItemEditTrx(parseInt($(this).data('row'), 10));
-        });
-        $(document).on('change', '.select-ikan-edit-trx', function() {
-            var rowIdx = parseInt($(this).data('row'), 10);
-            var row = editTransaksiState.items[rowIdx];
-            if (!row) return;
-            row.jenis = $(this).val();
-            var hargaDefault = $(this).find('option:selected').data('harga') || 0;
-            if (hargaDefault > 0 && (!row.harga || row.harga === 0)) {
-                row.harga = hargaDefault;
-                $('#editTrxItemsBody tr[data-row="' + rowIdx + '"] .input-harga-edit-trx').val(hargaDefault);
-            }
-            hitungSubtotalEditTrx(rowIdx);
-        });
-        $(document).on('change', '.input-jumlah-edit-trx', function() {
-            var rowIdx = parseInt($(this).data('row'), 10);
-            var row = editTransaksiState.items[rowIdx];
-            if (!row) return;
-            row.jumlah = parseFloat($(this).val()) || 0;
-            hitungSubtotalEditTrx(rowIdx);
-        });
-        $(document).on('change', '.input-harga-edit-trx', function() {
-            var rowIdx = parseInt($(this).data('row'), 10);
-            var row = editTransaksiState.items[rowIdx];
-            if (!row) return;
-            row.harga = parseFloat($(this).val()) || 0;
-            hitungSubtotalEditTrx(rowIdx);
-        });
-        $('#btnSimpanEditTransaksi').on('click', simpanEditTransaksi);
-        $('#btnHapusTransaksiIni').on('click', hapusTransaksiIni);
 
         // Master data buttons
         $(document).on('click', '#btnTambahPembeli', async function() {

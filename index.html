@@ -1,17 +1,13 @@
-<!-- index.html - Update bagian TAB 1: INPUT BATCH -->
 <!DOCTYPE html>
 <html lang="id">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
     <title>Aplikasi Rekap Ikan - PT Rafasya Putra Ustanto</title>
     
     <!-- Meta untuk PWA & SEO -->
     <meta name="description" content="Aplikasi pencatatan penjualan ikan PT Rafasya Putra Ustanto">
     <meta name="theme-color" content="#2c7da0">
-    <!-- Kedua meta ini dipertahankan: mobile-web-app-capable untuk Android/Chrome,
-         apple-mobile-web-app-capable tetap dibutuhkan iOS Safari untuk mode standalone -->
-    <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="RPU Ikan">
@@ -24,12 +20,8 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     
-    <!-- Custom CSS --> 
+    <!-- Custom CSS -->
     <link rel="stylesheet" href="style.css">
-    <style>
-        #rekapSidebar .list-group-item { cursor: pointer; }
-        #rekapSidebar .list-group-item.active { background-color: #2c7da0; border-color: #2c7da0; }
-    </style>
 </head>
 <body>
 <div class="main-container">
@@ -45,31 +37,29 @@
     
     <div id="connectionStatus" class="connection-status no-print"></div>
 
-    <!-- NAV TABS - Responsive Scroll -->
-    <div class="nav-tabs-wrapper no-print">
-        <ul class="nav nav-tabs" id="myTab" role="tablist">
-            <li class="nav-item">
-                <button class="nav-link active" id="tabTransaksi" data-bs-toggle="tab" data-bs-target="#transaksi" type="button" role="tab">
-                    <i class="fas fa-cart-plus me-2"></i> <span class="tab-label">Input Batch</span>
-                </button>
-            </li>
-            <li class="nav-item">
-                <button class="nav-link" id="tabRekap" data-bs-toggle="tab" data-bs-target="#rekap" type="button" role="tab">
-                    <i class="fas fa-chart-line me-2"></i> <span class="tab-label">Rekap Data</span>
-                </button>
-            </li>
-            <li class="nav-item">
-                <button class="nav-link" id="tabBongkaran" data-bs-toggle="tab" data-bs-target="#bongkaran" type="button" role="tab">
-                    <i class="fas fa-layer-group me-2"></i> <span class="tab-label">Rekap Bongkaran</span>
-                </button>
-            </li>
-            <li class="nav-item">
-                <button class="nav-link" id="tabMaster" data-bs-toggle="tab" data-bs-target="#master" type="button" role="tab">
-                    <i class="fas fa-database me-2"></i> <span class="tab-label">Master Data</span>
-                </button>
-            </li>
-        </ul>
-    </div>
+    <!-- NAV TABS -->
+    <ul class="nav nav-tabs no-print" id="myTab" role="tablist">
+        <li class="nav-item">
+            <button class="nav-link active" id="tabTransaksi" data-bs-toggle="tab" data-bs-target="#transaksi" type="button" role="tab">
+                <i class="fas fa-cart-plus me-2"></i> Input Batch
+            </button>
+        </li>
+        <li class="nav-item">
+            <button class="nav-link" id="tabRekap" data-bs-toggle="tab" data-bs-target="#rekap" type="button" role="tab">
+                <i class="fas fa-chart-line me-2"></i> Rekap Data
+            </button>
+        </li>
+        <li class="nav-item">
+            <button class="nav-link" id="tabBongkaran" data-bs-toggle="tab" data-bs-target="#bongkaran" type="button" role="tab">
+                <i class="fas fa-layer-group me-2"></i> Rekap Bongkaran
+            </button>
+        </li>
+        <li class="nav-item">
+            <button class="nav-link" id="tabMaster" data-bs-toggle="tab" data-bs-target="#master" type="button" role="tab">
+                <i class="fas fa-database me-2"></i> Master Data
+            </button>
+        </li>
+    </ul>
 
     <div class="tab-content" id="myTabContent">
         <!-- TAB 1: INPUT BATCH -->
@@ -77,22 +67,22 @@
             <div class="card">
                 <div class="card-header">
                     <i class="fas fa-edit me-2"></i> Form Transaksi Batch 
-                    <span class="badge-batch"><i class="fas fa-layer-group me-1"></i> <span id="batchCount">0</span> transaksi</span>
+                    <span class="badge-batch"><i class="fas fa-layer-group me-1"></i> <span id="batchCount">0</span> transaksi dalam batch</span>
                 </div>
                 <div class="card-body">
                     <!-- BARIS FORM ATAS -->
                     <div class="row mb-4">
-                        <div class="col-12 col-md-3">
+                        <div class="col-md-3">
                             <label class="form-label"><i class="fas fa-calendar-alt"></i> Tanggal Transaksi</label>
                             <input type="date" class="form-control" id="tanggal" required>
                             <div class="info-default" id="tanggalInfo">📅 Memuat data...</div>
                         </div>
-                        <div class="col-6 col-md-2">
+                        <div class="col-md-2">
                             <label class="form-label"><i class="fas fa-sun"></i> Hari</label>
                             <input type="text" class="form-control" id="hari" readonly style="background:#f0f2f5; font-weight:500;">
                         </div>
-                        <div class="col-6 col-md-3">
-                            <label class="form-label"><i class="fas fa-money-bill-wave"></i> Metode</label>
+                        <div class="col-md-3">
+                            <label class="form-label"><i class="fas fa-money-bill-wave"></i> Metode Pembayaran</label>
                             <select class="form-select" id="metodePembayaranBatch" required>
                                 <option value="Non Kontan">Non Kontan</option>
                                 <option value="Kontan">Kontan</option>
@@ -100,7 +90,7 @@
                                 <option value="Tempo">Tempo</option>
                             </select>
                         </div>
-                        <div class="col-12 col-md-4">
+                        <div class="col-md-4">
                             <label class="form-label"><i class="fas fa-boxes"></i> Bongkaran</label>
                             <input type="text" class="form-control" id="bongkaranBatchGlobal" placeholder="Nama bongkaran..." list="bongkaranListGlobal">
                             <div class="auto-fill-hint">💡 Isi otomatis dari master bongkaran</div>
@@ -108,13 +98,9 @@
                     </div>
                     
                     <div id="batchContainer"></div>
-                        <div class="row mb-3">
-                            <div class="col-12 text-end">
-                                <button type="button" class="btn-add-batch" id="btnTambahBatch">
-                                 <i class="fas fa-plus me-2"></i> Tambah Transaksi Baru
-                            </button>
-                        </div>
-                    </div>
+                    <button type="button" class="btn-add-batch" id="btnTambahBatch">
+                        <i class="fas fa-plus me-2"></i> Tambah Transaksi Baru
+                    </button>
                     
                     <div class="total-box">
                         <h4><i class="fas fa-calculator me-2"></i> Total Batch: <span id="totalBatch">Rp 0</span></h4>
@@ -124,126 +110,63 @@
                     <div class="batch-actions">
                         <div class="batch-summary">
                             <span class="summary-item"><i class="fas fa-file-invoice me-1"></i> <strong id="summaryTransaksi">0</strong> transaksi</span>
-                            <span class="summary-item"><i class="fas fa-fish me-1"></i> <strong id="summaryItem">0</strong> item</span>
+                            <span class="summary-item"><i class="fas fa-fish me-1"></i> <strong id="summaryItem">0</strong> item ikan</span>
                             <span class="summary-item"><i class="fas fa-money-bill me-1"></i> <strong id="summaryTotal">Rp 0</strong></span>
                         </div>
                         <div>
                             <button type="button" class="btn btn-success btn-lg px-5" id="btnSimpanBatch">
-                                <i class="fas fa-save me-2"></i> Simpan Semua
+                                <i class="fas fa-save me-2"></i> Simpan Semua Transaksi
                             </button>
                         </div>
                     </div>
+                    <div id="debugInfo" class="debug-info no-print"></div>
                 </div>
             </div>
         </div>
 
         <!-- TAB 2: REKAP DATA -->
         <div class="tab-pane fade" id="rekap" role="tabpanel">
-            <div class="row g-3">
-                <!-- SIDEBAR REKAP -->
-                <div class="col-12 col-md-2">
-                    <div class="list-group" id="rekapSidebar">
-                        <button type="button" class="list-group-item list-group-item-action active" data-subtab="subtabCetak">
-                            <i class="fas fa-print me-2"></i> Cetak
-                        </button>
-                        <button type="button" class="list-group-item list-group-item-action" data-subtab="subtabRekapTransaksi">
-                            <i class="fas fa-list-alt me-2"></i> Rekap
-                        </button>
-                    </div>
-                </div>
-
-                <!-- KONTEN SIDEBAR -->
-                <div class="col-12 col-md-10">
-                    <!-- ==== SUB-TAB: CETAK (konten lama, tidak berubah) ==== -->
-                    <div class="rekap-subtab" id="subtabCetak">
-                        <div class="card">
-                            <div class="card-header"><i class="fas fa-filter me-2"></i> Filter & Rekap Data Penjualan</div>
-                            <div class="card-body">
-                                <div class="filter-section">
-                                    <div class="row g-3">
-                                        <div class="col-12 col-md-3">
-                                            <label><i class="fas fa-calendar-day"></i> Dari Tanggal</label>
-                                            <input type="date" class="form-control" id="filterTglMulai">
-                                        </div>
-                                        <div class="col-12 col-md-3">
-                                            <label><i class="fas fa-calendar-week"></i> Sampai Tanggal</label>
-                                            <input type="date" class="form-control" id="filterTglSelesai">
-                                        </div>
-                                        <div class="col-12 col-md-3">
-                                            <label><i class="fas fa-user"></i> Nama Pembeli</label>
-                                            <select class="form-select" id="filterPembeli" style="width:100%;">
-                                                <option value="all">Semua Pembeli</option>
-                                            </select>
-                                        </div>
-                                        <div class="col-12 col-md-3">
-                                            <label><i class="fas fa-money-bill-wave"></i> Metode Bayar</label>
-                                            <select class="form-select" id="filterMetodePembayaran" style="width:100%;">
-                                                <option value="all">Semua Metode</option>
-                                            </select>
-                                        </div>
-                                    </div>
-                                    <div class="row mt-4">
-                                        <div class="col-12">
-                                            <button class="btn btn-primary" id="btnFilterData">
-                                                <i class="fas fa-search me-2"></i> Tampilkan
-                                            </button>
-                                            <button class="btn btn-success ms-2" id="btnCetakRekap">
-                                                <i class="fas fa-print me-2"></i> Cetak
-                                            </button>
-                                            <button class="btn btn-outline-success ms-2" id="btnExportRekap">
-                                                <i class="fas fa-file-excel me-2"></i> Export Spreadsheet
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div id="muatSemuaDataBox" class="alert alert-warning d-flex justify-content-between align-items-center flex-wrap gap-2 mt-3" style="display:none;">
-                                    <span><i class="fas fa-info-circle me-2"></i> Untuk menjaga aplikasi tetap ringan, hanya data 30 hari terakhir yang dimuat otomatis.</span>
-                                    <button class="btn btn-sm btn-warning" id="btnMuatSemuaData"><i class="fas fa-history me-2"></i> Muat Semua Data</button>
-                                </div>
-                                <div id="rekapTableContainer"></div>
+            <div class="card">
+                <div class="card-header"><i class="fas fa-filter me-2"></i> Filter & Rekap Data Penjualan</div>
+                <div class="card-body">
+                    <div class="filter-section">
+                        <div class="row g-3">
+                            <div class="col-md-3">
+                                <label><i class="fas fa-calendar-day"></i> Dari Tanggal</label>
+                                <input type="date" class="form-control" id="filterTglMulai">
+                            </div>
+                            <div class="col-md-3">
+                                <label><i class="fas fa-calendar-week"></i> Sampai Tanggal</label>
+                                <input type="date" class="form-control" id="filterTglSelesai">
+                            </div>
+                            <div class="col-md-3">
+                                <label><i class="fas fa-user"></i> Nama Pembeli</label>
+                                <select class="form-select" id="filterPembeli" style="width:100%;">
+                                    <option value="all">Semua Pembeli</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label><i class="fas fa-money-bill-wave"></i> Metode Pembayaran</label>
+                                <select class="form-select" id="filterMetodePembayaran" style="width:100%;">
+                                    <option value="all">Semua Metode</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="row mt-4">
+                            <div class="col-12">
+                                <button class="btn btn-primary" id="btnFilterData">
+                                    <i class="fas fa-search me-2"></i> Tampilkan Data
+                                </button>
+                                <button class="btn btn-success ms-2" id="btnCetakRekap">
+                                    <i class="fas fa-print me-2"></i> Cetak Laporan
+                                </button>
                             </div>
                         </div>
                     </div>
-
-                    <!-- ==== SUB-TAB: REKAP TRANSAKSI (baru: dikelompokkan per transaksi, bisa diedit) ==== -->
-                    <div class="rekap-subtab" id="subtabRekapTransaksi" style="display:none;">
-                        <div class="card">
-                            <div class="card-header"><i class="fas fa-list-alt me-2"></i> Rekap Transaksi (Dikelompokkan per Input)</div>
-                            <div class="card-body">
-                                <div class="alert alert-secondary small mb-3">
-                                    <i class="fas fa-info-circle me-1"></i> Tabel ini mengelompokkan item-item ikan yang diinput dalam 1 kali transaksi (batch) menjadi 1 baris. Klik <strong>Edit</strong> untuk mengubah, menghapus, atau menambah item ikan pada transaksi tersebut.
-                                </div>
-                                <div class="filter-section">
-                                    <div class="row g-3">
-                                        <div class="col-12 col-md-3">
-                                            <label><i class="fas fa-calendar-day"></i> Dari Tanggal</label>
-                                            <input type="date" class="form-control" id="filterTglMulaiGrup">
-                                        </div>
-                                        <div class="col-12 col-md-3">
-                                            <label><i class="fas fa-calendar-week"></i> Sampai Tanggal</label>
-                                            <input type="date" class="form-control" id="filterTglSelesaiGrup">
-                                        </div>
-                                        <div class="col-12 col-md-3">
-                                            <label><i class="fas fa-user"></i> Nama Pembeli</label>
-                                            <select class="form-select" id="filterPembeliGrup" style="width:100%;">
-                                                <option value="all">Semua Pembeli</option>
-                                            </select>
-                                        </div>
-                                        <div class="col-12 col-md-3 d-flex align-items-end">
-                                            <button class="btn btn-primary w-100" id="btnFilterDataGrup">
-                                                <i class="fas fa-search me-2"></i> Tampilkan
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div id="rekapTransaksiTableContainer" class="mt-3"></div>
-                            </div>
-                        </div>
-                    </div>
+                    <div id="rekapTableContainer"></div>
                 </div>
             </div>
         </div>
-
 
         <!-- TAB 3: REKAP BONGKARAN -->
         <div class="tab-pane fade" id="bongkaran" role="tabpanel">
@@ -252,18 +175,18 @@
                 <div class="card-body">
                     <div class="filter-section">
                         <div class="row g-3 align-items-end">
-                            <div class="col-12 col-md-4">
+                            <div class="col-md-4">
                                 <label><i class="fas fa-calendar-alt"></i> Pilih Tanggal</label>
                                 <input type="date" class="form-control" id="bongkaranTanggalSelect">
                             </div>
-                            <div class="col-12 col-md-4">
+                            <div class="col-md-4">
                                 <label><i class="fas fa-boxes"></i> Filter Bongkaran</label>
                                 <select class="form-select" id="filterBongkaran" style="width:100%;">
                                     <option value="all">Semua Bongkaran</option>
                                 </select>
                             </div>
-                            <div class="col-12 col-md-4">
-                                <label><i class="fas fa-money-bill-wave"></i> Filter Metode</label>
+                            <div class="col-md-4">
+                                <label><i class="fas fa-money-bill-wave"></i> Filter Metode Bayar</label>
                                 <select class="form-select" id="filterMetodeBayarBongkaran" style="width:100%;">
                                     <option value="all">Semua Metode</option>
                                 </select>
@@ -272,10 +195,10 @@
                         <div class="row mt-4">
                             <div class="col-12">
                                 <button class="btn btn-primary" id="btnTampilkanRekapBongkaran">
-                                    <i class="fas fa-chart-bar me-2"></i> Tampilkan
+                                    <i class="fas fa-chart-bar me-2"></i> Tampilkan Rekap
                                 </button>
                                 <button class="btn btn-success ms-2" id="btnCetakRekapBongkaran">
-                                    <i class="fas fa-print me-2"></i> Cetak
+                                    <i class="fas fa-print me-2"></i> Cetak Laporan
                                 </button>
                             </div>
                         </div>
@@ -291,8 +214,8 @@
                 <div class="card-header"><i class="fas fa-database me-2"></i> Master Data</div>
                 <div class="card-body">
                     <div class="row">
-                        <div class="col-12 col-md-3 mb-4">
-                            <div class="list-group master-sidebar">
+                        <div class="col-md-3 mb-4">
+                            <div class="list-group">
                                 <a href="#" id="sidebarPembeli" class="list-group-item list-group-item-action active">
                                     <i class="fas fa-users me-2"></i> Data Pembeli
                                 </a>
@@ -304,7 +227,7 @@
                                 </a>
                             </div>
                         </div>
-                        <div class="col-12 col-md-9">
+                        <div class="col-md-9">
                             <!-- Pembeli -->
                             <div id="sectionPembeli" class="master-section">
                                 <div class="card mb-4 border-primary">
@@ -313,7 +236,7 @@
                                     </div>
                                     <div class="card-body">
                                         <div class="row mb-3">
-                                            <div class="col-8">
+                                            <div class="col-md-8">
                                                 <div class="input-group">
                                                     <input type="text" class="form-control" id="newPembeli" placeholder="Nama pembeli baru">
                                                     <button class="btn btn-primary" id="btnTambahPembeli">
@@ -321,8 +244,8 @@
                                                     </button>
                                                 </div>
                                             </div>
-                                            <div class="col-4">
-                                                <div class="alert alert-info p-2 mb-0" id="pembeliCount">Total: 0</div>
+                                            <div class="col-md-4">
+                                                <div class="alert alert-info p-2 mb-0" id="pembeliCount">Total: 0 pembeli</div>
                                             </div>
                                         </div>
                                         <hr>
@@ -341,95 +264,43 @@
                             <!-- Ikan -->
                             <div id="sectionIkan" class="master-section" style="display:none;">
                                 <div class="card mb-4 border-success">
-                                    <div class="card-header bg-success text-white d-flex justify-content-between align-items-center flex-wrap gap-2">
-                                        <span><i class="fas fa-fish me-2"></i> Data Jenis Ikan</span>
-                                        <button class="btn btn-sm btn-outline-light" id="btnRiwayatHarga" type="button">
-                                            <i class="fas fa-history me-1"></i> Riwayat Harga
-                                        </button>
+                                    <div class="card-header bg-success text-white">
+                                        <i class="fas fa-fish me-2"></i> Data Jenis Ikan
                                     </div>
                                     <div class="card-body">
                                         <div class="search-box-container">
                                             <div class="input-group">
                                                 <span class="input-group-text bg-white"><i class="fas fa-search text-success"></i></span>
-                                                <input type="text" class="form-control" id="searchIkan" placeholder="Cari nama ikan...">
+                                                <input type="text" class="form-control" id="searchIkan" placeholder="Cari berdasarkan nama ikan...">
                                                 <button class="btn btn-outline-secondary" type="button" id="resetSearchIkan">
-                                                    <i class="fas fa-times"></i>
+                                                    <i class="fas fa-times"></i> Reset
                                                 </button>
                                             </div>
                                         </div>
                                         <div class="row g-3 mb-3">
-                                            <div class="col-6 col-md-4">
-                                                  <input type="text" class="form-control" id="newIkan" placeholder="Nama ikan baru">
-                                                      </div>
-                                                          <div class="col-6 col-md-3">
-                                                          <input type="number" min="0" class="form-control" id="newHargaIkan" placeholder="Harga (Rp/kg)" step="1000">
-                                                      </div>
-                                                  <div class="col-12 col-md-3">
-                                                      <button class="btn btn-success w-100" id="btnTambahIkan">
-                                                  <i class="fas fa-plus me-1"></i> Tambah
-                                              </button>
-                                          </div>
-                                          <div class="col-12 col-md-2">
-                                              <div class="alert alert-info p-2 mb-0" id="ikanCount">Total: 0</div>
-                                          </div>
-                                      </div>
-                                        <hr>
-                                        <div class="card mb-3 border-secondary">
-                                            <div class="card-header py-2 bg-light">
-                                                <i class="fas fa-layer-group me-2"></i> Update Harga Massal
+                                            <div class="col-md-4">
+                                                <input type="text" class="form-control" id="newIkan" placeholder="Nama ikan baru">
                                             </div>
-                                            <div class="card-body py-3">
-                                                <div class="row g-2 align-items-end">
-                                                    <div class="col-12 col-md-4">
-                                                        <label class="form-label mb-1 small">Mode Perubahan</label>
-                                                        <div class="d-flex flex-wrap gap-3">
-                                                            <div class="form-check">
-                                                                <input class="form-check-input" type="radio" name="bulkHargaMode" id="modeFixed" value="fixed" checked>
-                                                                <label class="form-check-label small" for="modeFixed">Harga Tetap</label>
-                                                            </div>
-                                                            <div class="form-check">
-                                                                <input class="form-check-input" type="radio" name="bulkHargaMode" id="modePercent" value="percent">
-                                                                <label class="form-check-label small" for="modePercent">Naik/Turun %</label>
-                                                            </div>
-                                                            <div class="form-check">
-                                                                <input class="form-check-input" type="radio" name="bulkHargaMode" id="modeNominal" value="nominal">
-                                                                <label class="form-check-label small" for="modeNominal">Naik/Turun Rp</label>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                    <div class="col-6 col-md-3">
-                                                        <label class="form-label mb-1 small">Nilai</label>
-                                                        <input type="number" class="form-control form-control-sm" id="bulkHargaNilai" placeholder="mis. 15000 atau -5">
-                                                    </div>
-                                                    <div class="col-6 col-md-3">
-                                                        <button class="btn btn-sm btn-warning w-100" id="btnTerapkanBulkHarga" type="button">
-                                                            <i class="fas fa-bolt me-1"></i> Terapkan ke Terpilih
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                                <div class="small text-muted mt-2">💡 Centang ikan pada tabel di bawah, lalu pilih mode: <strong>Harga Tetap</strong> (semua ikan terpilih diset ke nilai yang sama), <strong>Naik/Turun %</strong> (mis. isi 10 untuk naik 10%, -10 untuk turun 10%), atau <strong>Naik/Turun Rp</strong> (mis. isi 2000 atau -2000).</div>
-                                                <div class="small text-muted mt-1">✏️ <strong>Atau, kalau kenaikan harganya beda-beda tiap ikan</strong> (mis. cuma 1-2 ikan yang naik, dan nilainya juga tidak sama): langsung ubah angka di kolom "Harga (Rp/kg)" pada tabel di bawah untuk masing-masing ikan, centang ikan yang diubah, lalu klik tombol <strong>"Simpan Perubahan Harga Terpilih"</strong> di bawah tabel. Untuk cara ini field "Nilai" di atas tidak perlu diisi.</div>
+                                            <div class="col-md-3">
+                                                <input type="number" class="form-control" id="newHargaIkan" placeholder="Harga (Rp/kg)" step="1000">
+                                            </div>
+                                            <div class="col-md-3">
+                                                <button class="btn btn-success w-100" id="btnTambahIkan">
+                                                    <i class="fas fa-plus me-1"></i> Tambah Ikan Baru
+                                                </button>
+                                            </div>
+                                            <div class="col-md-2">
+                                                <div class="alert alert-info p-2 mb-0" id="ikanCount">Total: 0 ikan</div>
                                             </div>
                                         </div>
+                                        <hr>
                                         <div class="table-responsive" style="max-height:400px; overflow-y:auto;">
                                             <table class="table table-sm table-bordered table-hover">
                                                 <thead class="table-light sticky-top">
-                                                    <tr>
-                                                        <th style="width:40px"><input type="checkbox" id="chkSelectAllIkan"></th>
-                                                        <th style="width:40px">No</th>
-                                                        <th>Nama Ikan</th>
-                                                        <th>Harga (Rp/kg)</th>
-                                                        <th style="width:110px">Terakhir Update</th>
-                                                        <th style="width:70px">Aksi</th>
-                                                    </tr>
+                                                    <tr><th style="width:50px">No</th><th>Nama Ikan</th><th>Harga (Rp/kg)</th><th style="width:100px">Aksi</th></tr>
                                                 </thead>
                                                 <tbody id="listIkan"></tbody>
                                             </table>
-                                        </div>
-                                        <div class="text-end mt-2">
-                                            <button class="btn btn-sm btn-success" id="btnSimpanPerubahanIndividual" type="button">
-                                                <i class="fas fa-save me-1"></i> Simpan Perubahan Harga Terpilih
-                                            </button>
                                         </div>
                                     </div>
                                 </div>
@@ -443,7 +314,7 @@
                                     </div>
                                     <div class="card-body">
                                         <div class="row mb-3">
-                                            <div class="col-8">
+                                            <div class="col-md-8">
                                                 <div class="input-group">
                                                     <input type="text" class="form-control" id="newBongkaran" placeholder="Nama bongkaran baru">
                                                     <button class="btn btn-warning" id="btnTambahBongkaran">
@@ -451,8 +322,8 @@
                                                     </button>
                                                 </div>
                                             </div>
-                                            <div class="col-4">
-                                                <div class="alert alert-info p-2 mb-0" id="bongkaranCount">Total: 0</div>
+                                            <div class="col-md-4">
+                                                <div class="alert alert-info p-2 mb-0" id="bongkaranCount">Total: 0 bongkaran</div>
                                             </div>
                                         </div>
                                         <hr>
@@ -476,126 +347,10 @@
     </div>
 </div>
 
-<!-- MODAL EDIT TRANSAKSI (dari tab Rekap > Rekap Transaksi) -->
-<div class="modal fade" id="modalEditTransaksi" tabindex="-1" data-bs-backdrop="static" aria-hidden="true">
-    <div class="modal-dialog modal-lg modal-dialog-scrollable">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title"><i class="fas fa-edit me-2"></i> Edit Transaksi</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
-                <div class="row g-2 mb-2">
-                    <div class="col-6 col-md-4">
-                        <label class="form-label"><i class="fas fa-calendar-day"></i> Tanggal</label>
-                        <input type="date" class="form-control form-control-sm" id="editTrxTanggal">
-                    </div>
-                    <div class="col-6 col-md-4">
-                        <label class="form-label"><i class="fas fa-money-bill-alt"></i> DP</label>
-                        <input type="number" class="form-control form-control-sm" id="editTrxDp" step="1000" placeholder="0">
-                    </div>
-                    <div class="col-12 col-md-4">
-                        <label class="form-label"><i class="fas fa-money-bill-wave"></i> Metode</label>
-                        <select class="form-select form-select-sm" id="editTrxMetode" style="width:100%;"></select>
-                    </div>
-                </div>
-                <div class="row g-2 mb-2">
-                    <div class="col-12 col-md-6">
-                        <label class="form-label"><i class="fas fa-user"></i> Pembeli</label>
-                        <select class="form-select form-select-sm" id="editTrxPembeli" style="width:100%;"></select>
-                    </div>
-                    <div class="col-12 col-md-6">
-                        <label class="form-label"><i class="fas fa-boxes"></i> Bongkaran</label>
-                        <input type="text" class="form-control form-control-sm" id="editTrxBongkaran" placeholder="Nama bongkaran..." list="bongkaranListBatch">
-                    </div>
-                </div>
-
-                <div class="table-container"><div class="table-responsive">
-                    <table class="table-ikan table-sm">
-                        <thead><tr>
-                            <th style="min-width:120px;">Jenis Ikan</th>
-                            <th style="min-width:90px;">Jumlah (kg)</th>
-                            <th style="min-width:100px;">Harga (Rp/kg)</th>
-                            <th style="min-width:110px;">Subtotal</th>
-                            <th style="width:40px;">Aksi</th>
-                        </tr></thead>
-                        <tbody id="editTrxItemsBody"></tbody>
-                    </table>
-                </div></div>
-                <button type="button" class="btn-add-row" id="btnTambahItemEditTrx"><i class="fas fa-plus me-1"></i> Tambah Ikan</button>
-                <div class="text-end mt-1">
-                    <small><strong>Total: <span id="editTrxTotalDisplay" style="color:#2c7da0;font-size:15px;">Rp 0</span></strong></small>
-                </div>
-            </div>
-            <div class="modal-footer justify-content-between">
-                <button type="button" class="btn btn-outline-danger btn-sm" id="btnHapusTransaksiIni">
-                    <i class="fas fa-trash-alt me-1"></i> Hapus Transaksi Ini
-                </button>
-                <div>
-                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Batal</button>
-                    <button type="button" class="btn btn-success btn-sm" id="btnSimpanEditTransaksi">
-                        <i class="fas fa-save me-1"></i> Simpan Perubahan
-                    </button>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- MODAL PROGRESS SIMPAN BATCH -->
-<div class="modal fade" id="modalProgressSimpan" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title"><i class="fas fa-cloud-upload-alt me-2"></i> Menyimpan Transaksi...</h5>
-            </div>
-            <div class="modal-body">
-                <div class="d-flex justify-content-between mb-1">
-                    <span class="small fw-bold">Progres</span>
-                    <span class="small fw-bold" id="progressSimpanCounter">0 / 0</span>
-                </div>
-                <div class="progress mb-3" style="height:18px;">
-                    <div class="progress-bar bg-success progress-bar-striped progress-bar-animated" id="progressSimpanBar" role="progressbar" style="width:0%" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">0%</div>
-                </div>
-                <div class="alert alert-info py-2 px-3 mb-0 small" id="progressSimpanDetail">
-                    <i class="fas fa-sync fa-spin me-1"></i> Mempersiapkan data...
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- MODAL RIWAYAT HARGA -->
-<div class="modal fade" id="modalRiwayatHarga" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-lg modal-dialog-scrollable">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title"><i class="fas fa-history me-2"></i> Riwayat Perubahan Harga Ikan</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
-                <div class="alert alert-secondary small mb-3">
-                    <i class="fas fa-info-circle me-1"></i> Riwayat ini tersimpan di perangkat/browser ini saja (belum tersinkron ke server).
-                </div>
-                <div class="table-responsive">
-                    <table class="table table-sm table-bordered">
-                        <thead class="table-light">
-                            <tr><th style="width:40px">No</th><th>Nama Ikan</th><th>Perubahan Harga</th><th style="width:150px">Waktu</th></tr>
-                        </thead>
-                        <tbody id="riwayatHargaBody"></tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
 <!-- ==================== SCRIPTS ==================== -->
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
-<!-- SheetJS: dipakai untuk fitur Export Spreadsheet (.xlsx) di Tab Rekap Data -->
-<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 
 <!-- Custom JavaScript -->
 <script src="script.js"></script>
