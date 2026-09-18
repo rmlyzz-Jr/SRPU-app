@@ -677,9 +677,11 @@
         if (!valid) return;
         var btnSimpan = $('#btnSimpanBatch');
         btnSimpan.prop('disabled', true).html('<div class="loading-spinner"></div> Menyimpan ' + batchItems.length + ' transaksi...');
-        var allSuccess = true;
-        var errorMsg = '';
-        var totalSaved = 0;
+
+        // ---- Susun semua baris ikan (dari semua transaksi) jadi satu daftar payload ----
+        // Format payload PER BARIS sengaja dibuat SAMA seperti sebelumnya (tidak diubah)
+        // supaya tidak perlu mengubah apa pun di Google Apps Script (backend).
+        var payloads = [];
         for (var i = 0; i < batchItems.length; i++) {
             var batch = batchItems[i];
             var dpValue = batch.dp || 0;
@@ -688,32 +690,51 @@
                 var item = batch.items[j];
                 if (!item.jenis || item.jumlah <= 0 || item.harga <= 0) continue;
                 var dpForItem = (j === 0) ? dpValue : 0;
-                try {
-                    await fetch(SCRIPT_URL, {
-                        method: "POST",
-                        mode: "no-cors",
-                        headers: {"Content-Type": "application/json"},
-                        body: JSON.stringify({
-                            tanggal: tanggalUTC,
-                            hari: hari,
-                            pembeli: batch.pembeli,
-                            jenisIkan: item.jenis,
-                            jumlah: item.jumlah,
-                            harga: item.harga,
-                            total: item.subtotal,
-                            dp: dpForItem,
-                            bongkaran: bongkaranValue,
-                            metodePembayaran: batch.metode
-                        })
-                    });
+                payloads.push({
+                    tanggal: tanggalUTC,
+                    hari: hari,
+                    pembeli: batch.pembeli,
+                    jenisIkan: item.jenis,
+                    jumlah: item.jumlah,
+                    harga: item.harga,
+                    total: item.subtotal,
+                    dp: dpForItem,
+                    bongkaran: bongkaranValue,
+                    metodePembayaran: batch.metode
+                });
+            }
+        }
+
+        // ---- Kirim secara PARALEL per kelompok (chunk), bukan satu-satu berurutan ----
+        // Ini yang membuat proses simpan jauh lebih cepat: dulu N baris = N kali menunggu
+        // bergantian (bisa puluhan detik), sekarang N baris dikirim CONCURRENCY sekaligus.
+        // CONCURRENCY dijaga tidak terlalu besar supaya tidak membebani Google Apps Script.
+        var CONCURRENCY = 6;
+        var allSuccess = true;
+        var errorMsg = '';
+        var totalSaved = 0;
+
+        function kirimSatuItem(payload) {
+            return fetch(SCRIPT_URL, {
+                method: "POST",
+                mode: "no-cors",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify(payload)
+            });
+        }
+
+        for (var start = 0; start < payloads.length && allSuccess; start += CONCURRENCY) {
+            var chunk = payloads.slice(start, start + CONCURRENCY);
+            btnSimpan.html('<div class="loading-spinner"></div> Menyimpan item ' + (start + 1) + '-' + Math.min(start + chunk.length, payloads.length) + ' dari ' + payloads.length + '...');
+            var results = await Promise.allSettled(chunk.map(kirimSatuItem));
+            for (var r = 0; r < results.length; r++) {
+                if (results[r].status === 'fulfilled') {
                     totalSaved++;
-                } catch(err) {
+                } else {
                     allSuccess = false;
-                    errorMsg = err.message;
-                    break;
+                    errorMsg = (results[r].reason && results[r].reason.message) || 'Gagal mengirim data (jaringan terputus)';
                 }
             }
-            if (!allSuccess) break;
         }
         btnSimpan.prop('disabled', false).html('<i class="fas fa-save me-2"></i> Simpan Semua Transaksi');
         if (allSuccess) {
