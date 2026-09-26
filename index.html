@@ -24,6 +24,17 @@
     
     <!-- Custom CSS -->
     <link rel="stylesheet" href="style.css">
+
+    <!-- Styling tambahan: ID Batch, pewarnaan grup transaksi & popup Edit -->
+    <style>
+        .badge-id-batch{ background:#495057; color:#fff; padding:3px 8px; border-radius:12px; font-size:.7rem; font-weight:600; }
+        .rekap-table td, .rekap-table th{ font-size:.8rem; vertical-align:middle; }
+        tr.grp-a > td{ background:#ffffff; }
+        tr.grp-b > td{ background:#f1f6f9; }
+        tr.grp-kontan-a > td{ background:#ffd6d6; }
+        tr.grp-kontan-b > td{ background:#ffe9ee; }
+        @media print{ .no-print{ display:none !important; } }
+    </style>
 </head>
 <body>
 <div class="main-container">
@@ -158,6 +169,10 @@
                                 <select class="form-select" id="filterMetodePembayaran" style="width:100%;">
                                     <option value="all">Semua Metode</option>
                                 </select>
+                            </div>
+                            <div class="col-12 col-md-3">
+                                <label><i class="fas fa-hashtag"></i> ID Batch</label>
+                                <input type="text" class="form-control" id="filterKodeBatch" placeholder="cth: A1B2C3D4">
                             </div>
                         </div>
                         <div class="row mt-4">
@@ -353,6 +368,50 @@
             </div>
         </div>
     </div>
+</div>
+
+<!-- ==================== POPUP EDIT TRANSAKSI (per ID Batch, tab Rekap Data) ==================== -->
+<div class="modal fade" id="modalEditBatch" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="fas fa-pen me-2"></i>Edit Transaksi <span class="badge bg-secondary" id="editKodeLabel"></span></h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="row g-2 mb-3">
+          <div class="col-6 col-md-3"><label class="form-label">Tanggal</label>
+            <input type="date" class="form-control form-control-sm" id="editTanggal"></div>
+          <div class="col-6 col-md-2"><label class="form-label">Hari</label>
+            <input type="text" class="form-control form-control-sm" id="editHari" readonly style="background:#f0f2f5;"></div>
+          <div class="col-6 col-md-3"><label class="form-label">Metode</label>
+            <select class="form-select form-select-sm" id="editMetode"></select></div>
+          <div class="col-6 col-md-4"><label class="form-label">Pembeli</label>
+            <select class="form-select form-select-sm" id="editPembeli"></select></div>
+          <div class="col-12 col-md-4"><label class="form-label">Bongkaran</label>
+            <input type="text" class="form-control form-control-sm" id="editBongkaran" list="bongkaranListGlobal"></div>
+          <div class="col-12 col-md-4"><label class="form-label">DP (Rp)</label>
+            <input type="number" class="form-control form-control-sm" id="editDp" min="0"></div>
+        </div>
+
+        <table class="table table-sm mb-2">
+          <thead><tr><th>Jenis Ikan</th><th style="width:120px">Jumlah (kg)</th><th style="width:150px">Harga (Rp/kg)</th><th style="width:130px" class="text-end">Subtotal</th><th style="width:36px"></th></tr></thead>
+          <tbody id="editItemBody"></tbody>
+        </table>
+        <button type="button" class="btn btn-sm btn-outline-primary" id="btnTambahItemEdit"><i class="fas fa-plus me-1"></i>Tambah Item</button>
+
+        <div class="total-box mt-3">
+          <h4>Total: <span id="editTotal">Rp 0</span></h4>
+          <h4>Sisa: <span id="editSisa">Rp 0</span></h4>
+        </div>
+        <div id="editStatus" class="alert alert-danger mt-3 d-none"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Batal</button>
+        <button type="button" class="btn btn-success" id="btnSimpanEditBatch"><i class="fas fa-save me-2"></i>Simpan Perubahan</button>
+      </div>
+    </div>
+  </div>
 </div>
 
 <!-- ==================== SCRIPTS ==================== -->
