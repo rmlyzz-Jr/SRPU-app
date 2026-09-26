@@ -10,7 +10,7 @@
     "use strict";
 
     // ==================== KONFIGURASI ====================
-    var SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwBhvO1gmUN2TxZEK-cyAdRNOFWtStfBU6rA6D6eJcITYgT74uENkfN1H-LHPV14M6M/exec";
+    var SCRIPT_URL = "https://script.google.com/macros/s/AKfycbw92bwoykshVsgsEyGQ07t2zfhjTDE9PPBon2qKittunRZeapIBH9XmCUDVQXn4E48z/exec";
     var masterData = { pembeli: [], ikan: [], bongkaran: [], rekap: [], metodePembayaran: [] };
     var batchItems = [];
     var batchCounter = 0;
@@ -88,12 +88,18 @@
 
     // ==================== UTILITY FUNCTIONS ====================
     function formatRupiah(angka) {
-        if (isNaN(angka)) angka = 0;
-        return 'Rp ' + new Intl.NumberFormat('id-ID', { 
-            style: 'currency', 
-            currency: 'IDR', 
-            minimumFractionDigits: 0 
-        }).format(angka);
+        // PERBAIKAN: sebelumnya "Rp " ditambahkan manual DI DEPAN hasil
+        // Intl.NumberFormat({style:'currency', currency:'IDR'}), padahal format
+        // itu SUDAH menyertakan simbol "Rp" sendiri -> hasilnya "Rp Rp150.000"
+        // di semua tempat (tabel Rekap, cetak, subtotal item, dsb).
+        // Sekarang format manual pakai toLocaleString biasa (tanpa style currency)
+        // supaya "Rp " hanya ditambahkan SEKALI. Dibuat kebal juga terhadap input
+        // yang mungkin sudah berupa string berformat (mis. sudah ada "Rp"/titik).
+        var n = angka;
+        if (typeof n === 'string') n = n.replace(/[^\d-]/g, '');
+        n = Number(n);
+        if (isNaN(n)) n = 0;
+        return 'Rp ' + n.toLocaleString('id-ID', { maximumFractionDigits: 0 });
     }
 
     function getHariFromDate(dateString) {
@@ -815,6 +821,7 @@
                 updateFilterBongkaran();
                 updateFilterMetodeBayarBongkaran();
                 updateBongkaranDatalist();
+                updateIkanDatalist();
                 if (batchItems.length === 0) {
                     for (var i = 0; i < DEFAULT_BATCH_COUNT; i++) {
                         var pembeli = (i < DEFAULT_PEMBELI.length) ? DEFAULT_PEMBELI[i] : '';
@@ -925,34 +932,238 @@
         }
     }
 
+    // Dipakai oleh input "Jenis Ikan" di popup Edit Transaksi (Rekap Data)
+    function updateIkanDatalist() {
+        var datalist = $('#ikanListGlobal');
+        if (datalist.length === 0) {
+            $('body').append('<datalist id="ikanListGlobal"></datalist>');
+            datalist = $('#ikanListGlobal');
+        }
+        datalist.empty();
+        (masterData.ikan || []).forEach(function(ik) {
+            var nama = typeof ik === 'object' ? (ik.nama || ik) : ik;
+            if (nama) datalist.append('<option value="' + nama + '">');
+        });
+    }
+
     function filterData() {
         var filtered = masterData.rekap.slice();
         var tglMulai = $('#filterTglMulai').val();
         var tglSelesai = $('#filterTglSelesai').val();
         var pembeli = $('#filterPembeli').val();
         var metode = $('#filterMetodePembayaran').val();
+        var kodeQ = ($('#filterKodeBatch').val() || '').trim().toLowerCase();
         if (tglMulai) filtered = filtered.filter(function(i) { return i.tanggal >= tglMulai; });
         if (tglSelesai) filtered = filtered.filter(function(i) { return i.tanggal <= tglSelesai; });
         if (pembeli && pembeli !== 'all') filtered = filtered.filter(function(i) { return i.pembeli === pembeli; });
         if (metode && metode !== 'all') filtered = filtered.filter(function(i) { return i.metodePembayaran === metode; });
+        if (kodeQ) filtered = filtered.filter(function(i) { return (i.kodeTransaksi || '').toLowerCase().indexOf(kodeQ) !== -1; });
         displayRekapTable(filtered);
+    }
+
+    // ==================== REKAP PER ID BATCH (Kode Transaksi) ====================
+    var rekapGroupMap = {};
+    function kodePendek(kode) { return kode ? String(kode).slice(0, 8).toUpperCase() : '-'; }
+
+    // 1 grup = 1 transaksi = 1 Kode Transaksi. Baris lama yang belum punya Kode
+    // Transaksi (kalau ada) dianggap 1 baris = 1 grup sendiri, memakai rowIndex.
+    function kelompokkanBatch(rows) {
+        var map = {};
+        var order = [];
+        rows.forEach(function(r) {
+            var key = r.kodeTransaksi || ('ROW-' + r.rowIndex);
+            if (!map[key]) {
+                map[key] = {
+                    key: key, kode: r.kodeTransaksi || '',
+                    tanggal: r.tanggal, hari: r.hari, pembeli: r.pembeli,
+                    bongkaran: r.bongkaran, metode: r.metodePembayaran,
+                    dp: 0, total: 0, rows: []
+                };
+                order.push(key);
+            }
+            var g = map[key];
+            g.rows.push(r);
+            g.dp += (r.dp || 0);
+            g.total += (r.total || 0);
+        });
+        return order.map(function(k) { return map[k]; });
     }
 
     function displayRekapTable(data) {
         var container = $('#rekapTableContainer');
         if (!data.length) { container.html('<div class="alert alert-info">Tidak ada data</div>'); return; }
-        var html = '<div class="rekap-table-container"><table class="rekap-table"><thead><tr><th>No</th><th>Hari</th><th>Tanggal</th><th>Pembeli</th><th>Jenis Ikan</th><th>Jumlah (kg)</th><th>Harga (Rp)</th><th>Total (Rp)</th></tr></thead><tbody>';
-        for (var i = 0; i < data.length; i++) {
-            var item = data[i];
-            html += '<tr><td class="text-center">' + (i+1) + '</td><td class="text-center">' + item.hari + '</td><td class="text-center">' + formatTanggalIndonesia(item.tanggal) + '</td>' +
-                '<td class="text-center">' + item.pembeli + '</td><td>' + item.jenisIkan + '</td>' +
-                '<td class="text-end">' + parseFloat(item.jumlah).toLocaleString('id-ID') + '</td>' +
-                '<td class="text-end">' + formatRupiah(item.harga) + '</td><td class="text-end fw-bold text-primary">' + formatRupiah(item.total) + '</td></tr>';
-        }
-        var grandTotal = 0;
-        for (var i = 0; i < data.length; i++) grandTotal += (data[i].total || 0);
-        html += '<tr class="grand-total-row"><td colspan="7" class="text-end fw-bold">GRAND TOTAL:</td><td class="text-end fw-bold text-success">' + formatRupiah(grandTotal) + '</td></tr></tbody></table></div>';
+
+        var groups = kelompokkanBatch(data);
+        rekapGroupMap = {};
+        groups.forEach(function(g) { rekapGroupMap[g.key] = g; });
+
+        var totalTotal = 0, totalDp = 0, html = '';
+        html += '<div class="rekap-table-container"><table class="rekap-table">';
+        html += '<thead><tr><th>ID</th><th>Hari</th><th>Tanggal</th><th>Pembeli</th><th>Bongkaran</th><th>Metode</th>' +
+            '<th>Jenis Ikan</th><th>Jumlah (kg)</th><th>Harga (Rp)</th><th>Subtotal (Rp)</th><th>DP (Rp)</th><th>Sisa (Rp)</th><th class="no-print">Aksi</th></tr></thead><tbody>';
+
+        groups.forEach(function(g, gi) {
+            totalTotal += g.total; totalDp += g.dp;
+            var kontan = String(g.metode).toUpperCase() === 'KONTAN';
+            var cls = (kontan ? 'grp-kontan-' : 'grp-') + (gi % 2 === 0 ? 'a' : 'b');
+            var n = g.rows.length;
+
+            g.rows.forEach(function(r, i) {
+                html += '<tr class="' + cls + '">';
+                if (i === 0) {
+                    html += '<td rowspan="' + n + '" class="text-center"><span class="badge-id-batch" title="' + (g.kode || '') + '">' + kodePendek(g.kode) + '</span></td>';
+                    html += '<td rowspan="' + n + '" class="text-center">' + g.hari + '</td>';
+                    html += '<td rowspan="' + n + '" class="text-center">' + formatTanggalIndonesia(g.tanggal) + '</td>';
+                    html += '<td rowspan="' + n + '" class="text-center">' + g.pembeli + '</td>';
+                    html += '<td rowspan="' + n + '" class="text-center">' + (g.bongkaran || '-') + '</td>';
+                    html += '<td rowspan="' + n + '" class="text-center">' + g.metode + '</td>';
+                }
+                html += '<td>' + r.jenisIkan + '</td>';
+                html += '<td class="text-end">' + parseFloat(r.jumlah).toLocaleString('id-ID') + '</td>';
+                html += '<td class="text-end">' + formatRupiah(r.harga) + '</td>';
+                html += '<td class="text-end">' + formatRupiah(r.total) + '</td>';
+                if (i === 0) {
+                    html += '<td rowspan="' + n + '" class="text-end">' + formatRupiah(g.dp) + '</td>';
+                    html += '<td rowspan="' + n + '" class="text-end fw-bold">' + formatRupiah(g.total - g.dp) + '</td>';
+                    html += '<td rowspan="' + n + '" class="text-center no-print">' +
+                        '<button type="button" class="btn btn-sm btn-outline-primary btn-edit-batch" data-key="' + g.key + '" title="Edit transaksi ini"><i class="fas fa-pen"></i></button> ' +
+                        '<button type="button" class="btn btn-sm btn-outline-danger btn-hapus-batch" data-key="' + g.key + '" title="Hapus seluruh transaksi ini"><i class="fas fa-trash"></i></button></td>';
+                }
+                html += '</tr>';
+            });
+        });
+
+        html += '<tr class="grand-total-row"><td colspan="9" class="text-end fw-bold">GRAND TOTAL (' + groups.length + ' transaksi):</td>' +
+            '<td class="text-end fw-bold text-success">' + formatRupiah(totalTotal) + '</td>' +
+            '<td class="text-end fw-bold">' + formatRupiah(totalDp) + '</td>' +
+            '<td class="text-end fw-bold text-success">' + formatRupiah(totalTotal - totalDp) + '</td>' +
+            '<td class="no-print"></td></tr>';
+        html += '</tbody></table></div>';
         container.html(html);
+    }
+
+    // ==================== EDIT / HAPUS TRANSAKSI PER ID BATCH ====================
+    // PENTING: fitur ini memanggil action "updateTransaksiBatch" dan
+    // "deleteTransaksiBatch" di Code.gs (backend Apps Script), dan butuh field
+    // "kodeTransaksi" & "rowIndex" ikut dikirim balik oleh server untuk setiap
+    // baris rekap. Kalau Code.gs yang dipakai belum punya kedua action itu /
+    // belum mengirim rowIndex, tombol Edit & Hapus di sini tidak akan berfungsi
+    // sampai backend-nya disesuaikan.
+    var editState = null;
+
+    function bukaEditBatch(key) {
+        var g = rekapGroupMap[key];
+        if (!g) return;
+        editState = {
+            kodeAsli: g.kode,
+            deleted: [],
+            items: g.rows.map(function(r, idx) {
+                return { id: 'e' + idx + '-' + Date.now(), rowIndex: r.rowIndex, jenisIkan: r.jenisIkan, jumlah: r.jumlah, harga: r.harga };
+            })
+        };
+        $('#editKodeLabel').text(g.kode ? 'ID ' + kodePendek(g.kode) : '(data lama, belum ber-ID)');
+        $('#editTanggal').val(g.tanggal);
+        $('#editHari').val(g.hari);
+        var metodeSel = $('#editMetode').empty();
+        (masterData.metodePembayaran && masterData.metodePembayaran.length ? masterData.metodePembayaran : ['Non Kontan','Kontan','Transfer','Tempo']).forEach(function(m) {
+            metodeSel.append('<option value="' + m + '">' + m + '</option>');
+        });
+        metodeSel.val(g.metode);
+        $('#editPembeli').empty();
+        (masterData.pembeli || []).forEach(function(p) { $('#editPembeli').append('<option value="' + p + '">' + p + '</option>'); });
+        $('#editPembeli').val(g.pembeli);
+        $('#editBongkaran').val(g.bongkaran === '-' ? '' : (g.bongkaran || ''));
+        $('#editDp').val(g.dp || '');
+        $('#editStatus').addClass('d-none').removeClass('alert-danger');
+        renderEditItems();
+        var modalEl = document.getElementById('modalEditBatch');
+        bootstrap.Modal.getOrCreateInstance(modalEl).show();
+    }
+
+    function renderEditItems() {
+        var banyak = editState.items.length > 1;
+        var body = $('#editItemBody').empty();
+        editState.items.forEach(function(it) {
+            var row = $('<tr>' +
+                '<td><input type="text" class="form-control form-control-sm" list="ikanListGlobal" data-e="jenisIkan" data-id="' + it.id + '" value="' + (it.jenisIkan || '') + '"></td>' +
+                '<td><input type="number" class="form-control form-control-sm" min="0" step="0.001" data-e="jumlah" data-id="' + it.id + '" value="' + (it.jumlah || '') + '"></td>' +
+                '<td><input type="number" class="form-control form-control-sm" min="0" step="500" data-e="harga" data-id="' + it.id + '" value="' + (it.harga || '') + '"></td>' +
+                '<td class="text-end" data-esub="' + it.id + '">' + formatRupiah((parseFloat(it.jumlah)||0)*(parseFloat(it.harga)||0)) + '</td>' +
+                '<td class="text-center">' + (banyak ? '<button type="button" class="btn btn-sm btn-link text-danger p-0" data-eaction="hapus" data-id="' + it.id + '"><i class="fas fa-times"></i></button>' : '') + '</td>' +
+                '</tr>');
+            body.append(row);
+        });
+        updateEditTotal();
+    }
+
+    function updateEditTotal() {
+        var total = 0;
+        editState.items.forEach(function(it) { total += (parseFloat(it.jumlah)||0) * (parseFloat(it.harga)||0); });
+        var dp = parseFloat($('#editDp').val()) || 0;
+        $('#editTotal').text(formatRupiah(total));
+        $('#editSisa').text(formatRupiah(total - dp));
+    }
+
+    function errorEdit(msg) {
+        $('#editStatus').removeClass('d-none').addClass('alert-danger').text(msg);
+    }
+
+    async function simpanEditBatch() {
+        if (!editState) return;
+        var tanggal = $('#editTanggal').val();
+        var pembeli = $('#editPembeli').val();
+        var dp = parseFloat($('#editDp').val()) || 0;
+
+        if (!tanggal) return errorEdit('Tanggal wajib diisi.');
+        if (!pembeli) return errorEdit('Pembeli wajib dipilih.');
+        if (editState.items.length === 0) return errorEdit('Minimal 1 item ikan.');
+
+        var total = 0, items = [];
+        for (var i = 0; i < editState.items.length; i++) {
+            var it = editState.items[i];
+            var jumlah = parseFloat(it.jumlah) || 0, harga = parseFloat(it.harga) || 0;
+            if (!String(it.jenisIkan || '').trim() || jumlah <= 0 || harga <= 0) return errorEdit('Lengkapi jenis ikan, jumlah, dan harga di setiap baris item.');
+            total += jumlah * harga;
+            items.push({ rowIndex: it.rowIndex, jenisIkan: String(it.jenisIkan).trim(), jumlah: jumlah, harga: harga, subtotal: jumlah * harga });
+        }
+        if (dp > total) return errorEdit('DP tidak boleh lebih besar dari Total.');
+
+        var payload = {
+            action: 'updateTransaksiBatch',
+            kodeTransaksi: editState.kodeAsli,
+            tanggal: convertWIBtoUTC(tanggal),
+            hari: $('#editHari').val(),
+            metodePembayaran: $('#editMetode').val(),
+            pembeli: pembeli,
+            dp: dp,
+            bongkaran: $('#editBongkaran').val().trim() || '-',
+            items: items,
+            deletedRowIndexes: editState.deleted
+        };
+
+        var btn = $('#btnSimpanEditBatch');
+        btn.prop('disabled', true).html('<div class="loading-spinner"></div> Menyimpan...');
+        try {
+            await fetch(SCRIPT_URL, { method: 'POST', mode: 'no-cors', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+            bootstrap.Modal.getOrCreateInstance(document.getElementById('modalEditBatch')).hide();
+            await loadAllData();
+        } catch (err) {
+            errorEdit('Gagal menyimpan (jaringan terputus): ' + (err && err.message ? err.message : err));
+        } finally {
+            btn.prop('disabled', false).html('<i class="fas fa-save me-2"></i> Simpan Perubahan');
+        }
+    }
+
+    function hapusBatchRekap(key) {
+        var g = rekapGroupMap[key];
+        if (!g) return;
+        if (!confirm('Hapus SELURUH transaksi ' + g.pembeli + ' (' + g.rows.length + ' baris, ID ' + kodePendek(g.kode) + ')?\nTindakan ini tidak bisa dibatalkan.')) return;
+        fetch(SCRIPT_URL, {
+            method: 'POST', mode: 'no-cors', headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({ action: 'deleteTransaksiBatch', kodeTransaksi: g.kode, rowIndexes: g.rows.map(function(r){ return r.rowIndex; }) })
+        }).then(function() { return loadAllData(); }).catch(function(err) {
+            alert('Gagal menghapus (jaringan terputus): ' + (err && err.message ? err.message : err));
+        });
     }
 
     // ==================== REKAP BONGKARAN ====================
@@ -1297,6 +1508,47 @@
         $('#btnSimpanBatch').on('click', saveBatch);
         $('#btnFilterData').on('click', filterData);
         $('#btnCetakRekap').on('click', cetakRekap);
+        $('#filterKodeBatch').on('keyup', filterData);
+
+        // Edit / Hapus per ID batch (tabel Rekap Data)
+        $(document).on('click', '.btn-edit-batch', function() { bukaEditBatch($(this).data('key')); });
+        $(document).on('click', '.btn-hapus-batch', function() { hapusBatchRekap($(this).data('key')); });
+        $('#btnTambahItemEdit').on('click', function() {
+            if (!editState) return;
+            editState.items.push({ id: 'e' + Date.now(), rowIndex: null, jenisIkan: '', jumlah: '', harga: '' });
+            renderEditItems();
+        });
+        $('#btnSimpanEditBatch').on('click', simpanEditBatch);
+        $('#editDp').on('input', function() { if (editState) updateEditTotal(); });
+        $(document).on('input', '#editItemBody [data-e]', function() {
+            if (!editState) return;
+            var id = $(this).data('id'), field = $(this).data('e'), val = $(this).val();
+            var it = editState.items.find(function(x) { return x.id === id; });
+            if (!it) return;
+            it[field] = val;
+            if (field === 'jenisIkan') {
+                var cari = String(val).trim().toLowerCase();
+                var match = (masterData.ikan || []).find(function(m) {
+                    var nm = typeof m === 'object' ? m.nama : m;
+                    return nm && nm.toLowerCase() === cari;
+                });
+                if (match && (!it.harga || parseFloat(it.harga) === 0)) {
+                    it.harga = typeof match === 'object' ? (match.hargaDefault || match.harga || 0) : 0;
+                    $('#editItemBody [data-e="harga"][data-id="' + id + '"]').val(it.harga);
+                }
+            }
+            $('#editItemBody [data-esub="' + id + '"]').text(formatRupiah((parseFloat(it.jumlah)||0) * (parseFloat(it.harga)||0)));
+            updateEditTotal();
+        });
+        $(document).on('click', '#editItemBody [data-eaction="hapus"]', function() {
+            if (!editState) return;
+            var id = $(this).data('id');
+            var it = editState.items.find(function(x) { return x.id === id; });
+            if (!it) return;
+            if (it.rowIndex !== null && it.rowIndex !== undefined) editState.deleted.push(it.rowIndex);
+            editState.items = editState.items.filter(function(x) { return x.id !== id; });
+            renderEditItems();
+        });
         $('#btnTampilkanRekapBongkaran').on('click', tampilkanRekapBongkaran);
         $('#btnCetakRekapBongkaran').on('click', cetakRekapBongkaran);
         $('#searchIkan').on('keyup', function() { displayIkanList($(this).val()); });
