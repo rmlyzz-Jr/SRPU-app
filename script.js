@@ -11,13 +11,41 @@
 
     // ==================== KONFIGURASI ====================
     var SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwBhvO1gmUN2TxZEK-cyAdRNOFWtStfBU6rA6D6eJcITYgT74uENkfN1H-LHPV14M6M/exec";
-    var masterData = { pembeli: [], ikan: [], bongkaran: [], rekap: [], metodePembayaran: [] };
+    var masterData = { pembeli: [], ikan: [], bongkaran: [], rekap: [], metodePembayaran: [], historiHarga: [] };
     var batchItems = [];
     var batchCounter = 0;
     var dbConnected = false;
-    var DEFAULT_BATCH_COUNT = 5;
+    var DEFAULT_BATCH_COUNT = 1;   // awal hanya 1 batch (transaksi baru bisa ditambah lewat tombol)
     var DEFAULT_ROWS_PER_BATCH = 4;
-    var DEFAULT_PEMBELI = ['Pembeli 1', 'Pembeli 2', 'Pembeli 3', 'Pembeli 4', 'Pembeli 5'];
+    var DEFAULT_PEMBELI = [''];    // pembeli dikosongkan, dipilih manual
+    var METODE_DEFAULT = ['Non Kontan', 'Kontan', 'Transfer', 'Tempo'];
+
+    // Ikan yang ditampilkan di pilihan Input Batch: hanya yang AKTIF
+    // (ikan nonaktif tetap tampil jika sudah terpilih di baris tersebut).
+    function getIkanUntukInput(jenisTerpilih) {
+        var hasil = [];
+        var daftar = masterData.ikan || [];
+        for (var i = 0; i < daftar.length; i++) {
+            var ik = daftar[i];
+            var nama = typeof ik === 'object' ? ik.nama : ik;
+            var aktif = typeof ik === 'object' ? ik.aktif !== false : true;
+            if (aktif || nama === jenisTerpilih) hasil.push(ik);
+        }
+        return hasil;
+    }
+
+    // Daftar metode untuk select di tiap batch. Selalu ada isinya (fallback),
+    // supaya pilihan Metode tidak kosong walau data master belum termuat.
+    function getDaftarMetode(metodeTerpilih) {
+        var list = (masterData.metodePembayaran && masterData.metodePembayaran.length)
+            ? masterData.metodePembayaran.slice() : METODE_DEFAULT.slice();
+        if (metodeTerpilih && list.indexOf(metodeTerpilih) === -1) list.push(metodeTerpilih);
+        return list;
+    }
+
+    function escAttr(s) {
+        return String(s === undefined || s === null ? '' : s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+    }
 
     // ==================== PASTI JALAN - SCROLL & FOCUS ====================
     function pastiScrollKeAtas() {
@@ -88,11 +116,14 @@
 
     // ==================== UTILITY FUNCTIONS ====================
     function formatRupiah(angka) {
+        angka = Number(angka);
         if (isNaN(angka)) angka = 0;
-        return 'Rp ' + new Intl.NumberFormat('id-ID', { 
-            style: 'currency', 
-            currency: 'IDR', 
-            minimumFractionDigits: 0 
+        // PENTING: jangan pakai style:'currency' di sini. Format currency IDR sudah
+        // menyertakan "Rp" sendiri, sehingga hasilnya jadi "Rp Rp 15.000" (dobel).
+        // Cukup format angka biasa, lalu "Rp " ditambahkan satu kali di depan.
+        return 'Rp ' + new Intl.NumberFormat('id-ID', {
+            minimumFractionDigits: 0,
+            maximumFractionDigits: 0
         }).format(angka);
     }
 
@@ -231,6 +262,28 @@
                 }
             }, 50);
         });
+
+        // ---- Daftar jenis ikan OTOMATIS TERBUKA saat field terpilih/difokus
+        // (klik, atau pindah dengan Tab). Setelah memilih ikan, kursor langsung
+        // pindah ke kolom Jumlah pada baris yang sama.
+        var $sel = $(selector);
+        var terakhirTutup = 0;
+        $sel.on('select2:close', function() { terakhirTutup = Date.now(); });
+        $sel.on('select2:select', function() {
+            var el = $(this);
+            var bId = el.data('batch');
+            var row = el.data('row');
+            setTimeout(function() {
+                var inp = $('.input-jumlah-batch[data-batch="' + bId + '"][data-row="' + row + '"]');
+                if (inp.length) { inp.focus(); inp.select(); }
+            }, 80);
+        });
+        $sel.next('.select2-container').find('.select2-selection').on('focus', function() {
+            // abaikan fokus yang kembali otomatis tepat setelah dropdown ditutup
+            if (Date.now() - terakhirTutup < 400) return;
+            if ($sel.prop('disabled')) return;
+            $sel.select2('open');
+        });
     }
 
     // ==================== BATCH FUNCTIONS ====================
@@ -327,21 +380,15 @@
         html += '<div class="col-6 col-md-4">';
         html += '<label class="form-label"><i class="fas fa-money-bill-wave"></i> Metode</label>';
         html += '<select class="form-select form-select-sm select-metode-batch" data-batch="' + item.id + '">';
-        if (masterData.metodePembayaran && masterData.metodePembayaran.length) {
-            for (var i = 0; i < masterData.metodePembayaran.length; i++) {
-                var selected = (masterData.metodePembayaran[i] === item.metode) ? 'selected' : '';
-                html += '<option value="' + masterData.metodePembayaran[i] + '" ' + selected + '>' + masterData.metodePembayaran[i] + '</option>';
-            }
+        var daftarMetode = getDaftarMetode(item.metode);
+        for (var m = 0; m < daftarMetode.length; m++) {
+            var metodeSelected = (daftarMetode[m] === item.metode) ? 'selected' : '';
+            html += '<option value="' + escAttr(daftarMetode[m]) + '" ' + metodeSelected + '>' + daftarMetode[m] + '</option>';
         }
         html += '</select></div></div>';
-        
-        html += '<div class="row g-1 mb-2">';
-        html += '<div class="col-12">';
-        html += '<label class="form-label"><i class="fas fa-boxes"></i> Bongkaran</label>';
-        html += '<input type="text" class="form-control form-control-sm input-bongkaran-batch" data-batch="' + item.id + '" value="' + (item.bongkaran || $('#bongkaranBatchGlobal').val() || '') + '" placeholder="Nama bongkaran..." list="bongkaranListBatch">';
-        html += '<div class="auto-fill-hint">💡 Isi otomatis dari master bongkaran</div>';
-        html += '</div></div>';
-        
+
+        // (Bongkaran per batch dihapus: seluruh transaksi memakai Bongkaran di bagian atas form.)
+
         html += '<div class="table-container"><div class="table-responsive">';
         html += '<table class="table-ikan table-sm">';
         html += '<thead><tr>';
@@ -359,9 +406,10 @@
             html += '<tr id="' + item.id + '-item-' + i + '" class="' + rowClass + '">';
             html += '<td><select class="form-select form-select-sm select-ikan-batch" data-batch="' + item.id + '" data-row="' + i + '" style="width:100%;">';
             html += '<option value="">Pilih</option>';
-            if (masterData.ikan && masterData.ikan.length) {
-                for (var j = 0; j < masterData.ikan.length; j++) {
-                    var ikan = masterData.ikan[j];
+            var daftarIkanInput = getIkanUntukInput(row.jenis);
+            if (daftarIkanInput.length) {
+                for (var j = 0; j < daftarIkanInput.length; j++) {
+                    var ikan = daftarIkanInput[j];
                     var namaIkan = typeof ikan === 'object' ? (ikan.nama || ikan) : ikan;
                     var hargaDefault = typeof ikan === 'object' ? (ikan.hargaDefault || ikan.harga || 0) : 0;
                     var selected = (namaIkan === row.jenis) ? 'selected' : '';
@@ -632,20 +680,6 @@
             }
         });
 
-        $(document).on('change', '.input-bongkaran-batch', function() {
-            var bId = $(this).closest('.batch-item').attr('id');
-            var batch = getBatch(bId);
-            if (batch) batch.bongkaran = $(this).val();
-        });
-
-        $(document).on('change', '#bongkaranBatchGlobal', function() {
-            var val = $(this).val();
-            $('.input-bongkaran-batch').val(val);
-            for (var i = 0; i < batchItems.length; i++) {
-                batchItems[i].bongkaran = val;
-            }
-        });
-
         $(document).on('change', '.input-dp-batch', function() {
             var bId = $(this).closest('.batch-item').attr('id');
             var batch = getBatch(bId);
@@ -745,7 +779,7 @@
         for (var i = 0; i < batchItems.length && allSuccess; i++) {
             var batch = batchItems[i];
             var dpValue = batch.dp || 0;
-            var bongkaranValue = batch.bongkaran || bongkaranGlobal || '-';
+            var bongkaranValue = bongkaranGlobal || '-'; // ikut Bongkaran di bagian atas
 
             var itemsForThisBatch = [];
             for (var j = 0; j < batch.items.length; j++) {
@@ -814,11 +848,12 @@
     async function loadAllData() {
         try {
             $('#connectionStatus').removeClass('error success').addClass('success').html('<div class="loading-spinner"></div> Menghubungkan ke database...').show();
-            var response = await fetch(SCRIPT_URL);
+            var response = await fetch(SCRIPT_URL + '?api=1'); // ?api=1 = minta JSON (Code.gs terbaru)
             var result = await response.json();
             if (result.status === 'success') {
                 masterData.pembeli = result.pembeli || [];
                 masterData.ikan = result.ikan || [];
+                masterData.historiHarga = result.historiHarga || [];
                 masterData.bongkaran = result.bongkaran || [];
                 masterData.metodePembayaran = result.metodePembayaran || ['Non Kontan','Kontan','Transfer','Tempo'];
                 masterData.rekap = (result.rekap || []).map(function(item) {
@@ -1089,13 +1124,21 @@
                 var item = dataToShow[i];
                 var nama = typeof item === 'object' ? (item.nama || item) : item;
                 var harga = typeof item === 'object' ? (item.hargaDefault || item.harga || 0) : 0;
-                tbody.append('<tr><td class="text-center">' + (i+1) + '</td><td>' + nama + '</td>' +
-                    '<td><input type="number" class="form-control form-control-sm harga-edit" data-ikan="' + nama + '" value="' + harga + '" step="500" style="width:120px;display:inline-block">' +
-                    '<button class="btn btn-sm btn-primary btn-update-harga" data-ikan="' + nama + '"><i class="fas fa-save"></i></button></td>' +
-                    '<td class="text-center"><button class="btn btn-sm btn-danger btn-delete-ikan" data-ikan="' + nama + '"><i class="fas fa-trash"></i></button></td></tr>');
+                var aktif = typeof item === 'object' ? item.aktif !== false : true;
+                var jmlRiwayat = (masterData.historiHarga || []).filter(function(h) { return h.nama === nama; }).length;
+                var namaAttr = escAttr(nama);
+                tbody.append('<tr class="' + (aktif ? '' : 'table-secondary text-muted') + '"><td class="text-center">' + (i+1) + '</td>' +
+                    '<td>' + nama + (aktif ? '' : ' <span class="badge bg-secondary">Nonaktif</span>') + '</td>' +
+                    '<td><input type="number" class="form-control form-control-sm harga-edit" data-ikan="' + namaAttr + '" value="' + harga + '" step="500" style="width:120px;display:inline-block">' +
+                    '<button class="btn btn-sm btn-primary btn-update-harga" data-ikan="' + namaAttr + '"><i class="fas fa-save"></i></button></td>' +
+                    '<td class="text-center"><div class="form-check form-switch d-inline-block m-0" title="' + (aktif ? 'Aktif - klik untuk menonaktifkan' : 'Nonaktif - klik untuk mengaktifkan') + '">' +
+                    '<input class="form-check-input switch-ikan-aktif" type="checkbox" role="switch" data-ikan="' + namaAttr + '" ' + (aktif ? 'checked' : '') + '></div></td>' +
+                    '<td class="text-center text-nowrap">' +
+                    '<button class="btn btn-sm btn-secondary btn-riwayat-ikan" data-ikan="' + namaAttr + '" title="Riwayat harga 7 hari"><i class="fas fa-clock-rotate-left"></i>' + (jmlRiwayat ? ' <span class="badge bg-light text-dark">' + jmlRiwayat + '</span>' : '') + '</button> ' +
+                    '<button class="btn btn-sm btn-danger btn-delete-ikan" data-ikan="' + namaAttr + '"><i class="fas fa-trash"></i></button></td></tr>');
             }
         } else {
-            tbody.append('<tr><td colspan="4" class="text-center text-muted">Tidak ada data untuk "' + filterText + '"</td></tr>');
+            tbody.append('<tr><td colspan="5" class="text-center text-muted">Tidak ada data untuk "' + filterText + '"</td></tr>');
         }
         $('#ikanCount').text('Total: ' + dataToShow.length + ' / ' + masterData.ikan.length);
         $('.btn-update-harga').off('click').on('click', async function() {
@@ -1103,6 +1146,12 @@
         });
         $('.btn-delete-ikan').off('click').on('click', async function() {
             if (confirm('Hapus ikan "' + $(this).data('ikan') + '"?')) await deleteIkan($(this).data('ikan'));
+        });
+        $('.switch-ikan-aktif').off('change').on('change', function() {
+            setStatusIkan($(this).data('ikan'), $(this).is(':checked'));
+        });
+        $('.btn-riwayat-ikan').off('click').on('click', function() {
+            bukaRiwayatIkan($(this).data('ikan'));
         });
     }
 
@@ -1157,6 +1206,58 @@
         await loadAllData();
         refreshMasterDisplay();
         return true;
+    }
+
+    // Aktif / nonaktifkan ikan. Ikan nonaktif tidak muncul di pilihan Input Batch.
+    // Tampilan diperbarui langsung (tanpa memuat ulang seluruh data), lalu dikirim ke server.
+    async function setStatusIkan(nama, aktif) {
+        for (var i = 0; i < masterData.ikan.length; i++) {
+            var ik = masterData.ikan[i];
+            if (typeof ik === 'object' && ik.nama === nama) { ik.aktif = !!aktif; break; }
+        }
+        displayIkanList($('#searchIkan').val());
+        rerenderAllBatches(); // daftar ikan di form Input Batch ikut diperbarui
+        try {
+            await fetch(SCRIPT_URL, { method: "POST", mode: "no-cors", body: JSON.stringify({ action: "setStatusIkan", nama: nama, aktif: !!aktif }) });
+        } catch (err) {
+            alert('⚠️ Gagal menyimpan status ikan: ' + ((err && err.message) || 'jaringan terputus'));
+        }
+    }
+
+    // Gambar ulang semua blok batch (isi yang sudah diketik tetap ada) agar daftar ikan terbaru dipakai.
+    function rerenderAllBatches() {
+        for (var i = 0; i < batchItems.length; i++) {
+            var b = batchItems[i];
+            $('#' + b.id).replaceWith(renderBatchItemHTML(b));
+            setupBatchEvents(b.id);
+        }
+        reattachGlobalEvents();
+        updateBatchSummary();
+    }
+
+    // Popup riwayat perubahan harga ikan (7 hari terakhir)
+    function bukaRiwayatIkan(nama) {
+        $('#riwayatNama').text(nama);
+        var list = (masterData.historiHarga || []).filter(function(h) { return h.nama === nama; });
+        var html;
+        if (!list.length) {
+            html = '<div class="alert alert-info mb-0">Tidak ada perubahan harga dalam 7 hari terakhir.</div>';
+        } else {
+            html = '<table class="table table-sm table-bordered mb-0"><thead class="table-light"><tr><th>Waktu</th><th class="text-end">Harga Lama (Rp)</th><th class="text-end">Harga Baru (Rp)</th><th class="text-end">Selisih (Rp)</th></tr></thead><tbody>';
+            for (var i = 0; i < list.length; i++) {
+                var h = list[i];
+                var awal = (h.hargaLama === null || h.hargaLama === undefined);
+                var selisih = awal ? null : h.hargaBaru - h.hargaLama;
+                var warna = selisih === null ? '' : (selisih > 0 ? 'text-success' : 'text-danger');
+                html += '<tr><td>' + h.waktu + (awal ? ' <span class="badge bg-info">harga awal</span>' : '') + '</td>' +
+                    '<td class="text-end">' + (awal ? '-' : Number(h.hargaLama).toLocaleString('id-ID')) + '</td>' +
+                    '<td class="text-end">' + Number(h.hargaBaru).toLocaleString('id-ID') + '</td>' +
+                    '<td class="text-end ' + warna + '">' + (selisih === null ? '-' : (selisih > 0 ? '+' : '') + selisih.toLocaleString('id-ID')) + '</td></tr>';
+            }
+            html += '</tbody></table>';
+        }
+        $('#riwayatBody').html(html);
+        bootstrap.Modal.getOrCreateInstance(document.getElementById('modalRiwayat')).show();
     }
 
     async function deleteIkan(nama) {
