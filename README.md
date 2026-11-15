@@ -1,33 +1,84 @@
-# Aplikasi Rekap Ikan (PWA) - PT. Rafasya Putra Ustanto
+# Rekap Ikan PWA — PT. Rafasya Putra Ustanto
 
-Tampilan (front-end) di GitHub Pages, data & AI tetap di Google Apps Script + Spreadsheet.
+Pembungkus **PWA** (Progressive Web App) untuk Aplikasi Rekap Ikan yang berjalan di Google Apps Script.
+Dengan ini aplikasi bisa **diinstal ke layar utama HP / laptop** seperti aplikasi biasa (layar penuh, ikon sendiri).
+
+> Data dan logika tetap di Google Apps Script + Google Sheets. Repo ini hanya "cangkang" yang menampilkan web app tersebut.
+
+## Isi repo
 
 ```
-index.html      <- salin dari project Apps Script + 4 baris di <head> (lihat index-head.txt)
-pwa.js          <- jembatan ke Apps Script + daftar service worker
-sw.js           <- service worker (cache tampilan)
-manifest.json   <- manifest PWA
-icons/          <- ikon aplikasi
-apps-script/    <- file untuk Apps Script (bukan untuk GitHub Pages)
+├── README.md
+├── index.html       # halaman utama (memuat web app Apps Script dalam layar penuh)
+├── manifest.json    # identitas PWA (nama, warna, ikon)
+├── sw.js            # service worker (cache cangkang, mendukung instal)
+├── .gitignore
+└── icon/
+    ├── icon-192.png
+    ├── icon-512.png
+    ├── icon-maskable-512.png
+    └── apple-touch-icon.png
 ```
 
-## A. Siapkan Apps Script (sekali)
-1. Tambah file baru **Gateway.gs** (isi dari `apps-script/Gateway.gs`).
-2. Di `Code.gs`, ubah awal `doPost` sesuai `apps-script/doPost-patch.txt`.
-3. (Disarankan) Project Settings > Script Properties > tambah `APP_TOKEN` = kode rahasia.
-4. Deploy > **Manage deployments** > ikon pensil > Version: **New version** > Deploy.
-   Pastikan *Execute as: Me* dan *Who has access: **Anyone***. URL `/exec` tidak berubah.
+## LANGKAH 1 — Izinkan Apps Script ditampilkan di dalam PWA (WAJIB)
 
-## B. Upload ke GitHub
-1. Buat repo baru (mis. `rekap-ikan`), upload semua file di folder ini kecuali `apps-script/`, `index-head.txt`.
-2. Settings > Pages > Source: *Deploy from a branch* > `main` / `(root)` > Save.
-3. Buka `https://USERNAME.github.io/rekap-ikan/`.
+Secara bawaan Apps Script melarang halamannya dibuka di dalam `iframe`. Di **Code.gs**, ubah fungsi `doGet` menjadi:
 
-## C. Pasang di HP / komputer
-Chrome/Edge: menu > **Instal aplikasi** / **Tambahkan ke layar utama**. Safari iOS: Bagikan > **Tambah ke Layar Utama**.
+```javascript
+function doGet(e) {
+  if (e && e.parameter && e.parameter.api === '1') return ambilSemuaDataJson();
+  return HtmlService.createHtmlOutputFromFile('index')
+    .setTitle('Aplikasi Rekap Ikan - PT Rafasya Putra Ustanto')
+    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+}
+```
+
+Lalu **Deploy → Manage deployments → ikon pensil → Version: New version → Deploy**.
+Alamat `/exec` tetap sama.
+
+Pastikan deployment: *Execute as: Me*, *Who has access: Anyone* (atau sesuai kebutuhan).
+
+## LANGKAH 2 — Upload ke GitHub
+
+1. Buat repository baru di GitHub, mis. `rekap-ikan-pwa` (Public).
+2. Upload semua file & folder `icon` di atas ke root repository (Add file → Upload files).
+3. Commit.
+
+## LANGKAH 3 — Aktifkan GitHub Pages
+
+1. Repository → **Settings → Pages**.
+2. *Source*: **Deploy from a branch**, branch **main**, folder **/ (root)**, lalu **Save**.
+3. Tunggu ±1 menit. Alamat PWA: `https://USERNAME.github.io/rekap-ikan-pwa/`
+
+## LANGKAH 4 — Instal di perangkat
+
+- **Android (Chrome):** buka alamat di atas → menu ⋮ → **Instal aplikasi** / *Tambahkan ke layar utama*.
+- **iPhone (Safari):** Bagikan → **Tambah ke Layar Utama**.
+- **Laptop (Chrome/Edge):** ikon instal di ujung kanan kolom alamat.
+
+## Mengganti alamat Apps Script
+
+Kalau membuat deployment baru dengan alamat `/exec` berbeda, ubah satu baris ini di `index.html`:
+
+```javascript
+var APP_URL = 'https://script.google.com/macros/s/.../exec';
+```
+
+## Mengganti ikon dengan logo perusahaan
+
+Ganti keempat file di folder `icon/` dengan logo sendiri (nama file & ukuran sama):
+
+| File | Ukuran |
+|---|---|
+| `icon-192.png` | 192 × 192 |
+| `icon-512.png` | 512 × 512 |
+| `icon-maskable-512.png` | 512 × 512 (logo di dalam area tengah ±80%, latar penuh) |
+| `apple-touch-icon.png` | 180 × 180 |
+
+Setelah mengubah file apa pun, naikkan nomor `VERSI` di `sw.js` (mis. `rekap-ikan-v2`) agar cache lama diganti.
 
 ## Catatan
-- Setiap mengubah `index.html` atau `pwa.js`, naikkan `VERSI` di `sw.js` (mis. `rekap-ikan-v2`) supaya HP mengambil versi baru.
-- Mode offline hanya menampilkan tampilan; simpan/baca data tetap butuh internet.
-- Ganti ikon di `icons/` dengan logo perusahaan (192x192, 512x512, dan versi maskable 512x512).
-- Lupa/ganti kode akses di satu perangkat: buka konsol browser, ketik `gantiKodeAkses()`.
+
+- Aplikasi **butuh internet** (data ada di Google Sheets). Saat offline, hanya layar pembuka yang muncul.
+- Login Google / izin akses tetap mengikuti pengaturan deployment Apps Script.
+- Fitur tempel gambar (Ctrl+V) dan upload kamera berjalan di dalam iframe; bila ada yang tidak berfungsi di mode terinstal, gunakan tombol **Buka langsung**.
