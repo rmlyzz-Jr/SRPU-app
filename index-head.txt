@@ -1,9 +1,0 @@
-Di index.html Anda (yang sama persis dengan versi Apps Script), tambahkan 4 baris ini di dalam <head>,
-tepat setelah baris <title>...</title>. pwa.js HARUS paling atas sebelum script lain.
-
-  <link rel="manifest" href="manifest.json">
-  <meta name="theme-color" content="#2c7da0">
-  <link rel="apple-touch-icon" href="icons/icon-192.png">
-  <script src="pwa.js"></script>
-
-Tidak ada bagian lain di index.html yang perlu diubah.
