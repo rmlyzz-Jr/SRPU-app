@@ -1,27 +1,17 @@
 {
-  "name": "RPU App - PT Rafasya Putra Ustanto",
-  "short_name": "RPU Ikan",
-  "description": "Aplikasi pencatatan penjualan ikan PT Rafasya Putra Ustanto",
-  "start_url": "/",
+  "name": "Aplikasi Rekap Ikan - PT Rafasya Putra Ustanto",
+  "short_name": "Rekap Ikan",
+  "description": "Rekap penjualan ikan PT. Rafasya Putra Ustanto",
+  "lang": "id",
+  "start_url": "./index.html",
+  "scope": "./",
   "display": "standalone",
-  "orientation": "portrait",
-  "background_color": "#2c7da0",
+  "orientation": "any",
+  "background_color": "#f4f6f8",
   "theme_color": "#2c7da0",
   "icons": [
-    {
-      "src": "assets/icons/icon-72.png",
-      "sizes": "72x72",
-      "type": "image/png"
-    },
-    {
-      "src": "assets/icons/icon-192.png",
-      "sizes": "192x192",
-      "type": "image/png"
-    },
-    {
-      "src": "assets/icons/icon-512.png",
-      "sizes": "512x512",
-      "type": "image/png"
-    }
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
   ]
 }
